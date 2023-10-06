@@ -1,6 +1,6 @@
-﻿using Common.Logging;
-using JoelRichPodcast.Abstract;
+﻿using JoelRichPodcast.Abstract;
 using JoelRichPodcast.Models;
+using Microsoft.Extensions.Logging;
 using PodcastRssGenerator4DotNet;
 
 namespace JoelRichPodcast.Decorators;
@@ -8,11 +8,11 @@ namespace JoelRichPodcast.Decorators;
 
 public class LoggedLinkedParser : ILinkParser
 {
-    private readonly ILog _log;
+    private readonly ILogger _log;
     private readonly ILinkParser _parser;
     private readonly string _parserClass;
 
-    public LoggedLinkedParser(ILinkParser parser, ILog log)
+    public LoggedLinkedParser(ILinkParser parser, ILogger<LoggedLinkedParser> log)
     {
         _parser = parser;
         _parserClass = parser.GetType().Name;
@@ -22,7 +22,7 @@ public class LoggedLinkedParser : ILinkParser
     {
         var episode = _parser.ParseLink(link);
         var parsedVerbiage = episode == null ? "could NOT parse" : "PARSED";
-        _log.Debug($"{_parserClass} {parsedVerbiage} {link.LinkURL}");
+        _log.LogDebug("{parserClass} {parsedVerbiage} {linkURL}", _parserClass, parsedVerbiage, link.LinkURL);
         return episode;
     }
 }

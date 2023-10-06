@@ -1,48 +1,28 @@
-using System;
-using System.Xml;
-using StructureMap;
-using Common.Logging;
-using System.IO;
-using System.Text;
 using JoelRichPodcast.Services;
 using JoelRichPodcast.Abstract;
 using JoelRichPodcast.Decorators;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+using System.Threading.Tasks;
 
 namespace JoelRichPodcast;
 
 internal class Program
 {
 
-    private static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
-        using (var container = GetContainer())
-        {
-            var pg = container.GetInstance<PodcastGeneratorFactory>().GetPodcastGenerator();
+        var hostBuilder = Host.CreateDefaultBuilder()
+            .ConfigureServices(services => services
+            .AddSingleton<JoelRichPodcastGenerator>()
+            .AddSingleton<JoelRichFeedGenerator>()
+            .AddSingleton<PodcastGeneratorFactory>()
+            .AddScoped<ILinkParser, YUTorahLinkParser>()
+            .AddScoped<ILinkParser, MP3LinkParser>()
+            .Decorate<ILinkParser, LoggedLinkedParser>());
 
-            using var ms = new MemoryStream();
-            using (var xmlTextWriter = new XmlTextWriter(ms, Encoding.UTF8))
-            {
-                pg.Generate(xmlTextWriter);
-            }
-
-            var xml = Encoding.UTF8.GetString(ms.ToArray());
-
-            return;
-        }
-        Console.Write("Program Complete.");
-        Console.ReadLine();
-    }
-
-    private static IContainer GetContainer()
-    {
-        return new Container(c =>
-        {
-            c.For<ILog>().Use(LogManager.GetLogger<Program>());
-
-            c.For<ILinkParser>().DecorateAllWith<LoggedLinkedParser>();
-            c.For<ILinkParser>().Add<YUTorahLinkParser>();
-            c.For<ILinkParser>().Add<MP3LinkParser>();
-        });
+        using var host = hostBuilder.Build();
+        host.Services.GetService<JoelRichPodcastGenerator>().GetPodcastXml();
     }
 }
 

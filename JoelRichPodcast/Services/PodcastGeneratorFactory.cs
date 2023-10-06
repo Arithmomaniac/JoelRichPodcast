@@ -1,6 +1,6 @@
-﻿using Common.Logging;
-using CsQuery;
+﻿using CsQuery;
 using JoelRichPodcast.Models;
+using Microsoft.Extensions.Logging;
 using PodcastRssGenerator4DotNet;
 using System;
 using System.Linq;
@@ -12,9 +12,9 @@ namespace JoelRichPodcast.Services;
 public class PodcastGeneratorFactory
 {
     readonly JoelRichFeedGenerator _feedGenerator;
-    private readonly ILog _log;
+    private readonly ILogger _log;
 
-    internal PodcastGeneratorFactory(JoelRichFeedGenerator feedGenerator, ILog log)
+    public PodcastGeneratorFactory(JoelRichFeedGenerator feedGenerator, ILogger<PodcastGeneratorFactory> log)
     {
         _feedGenerator = feedGenerator;
         _log = log;
@@ -52,7 +52,7 @@ public class PodcastGeneratorFactory
         };
         if (parsedRSSFeedItem is not null)
         {
-            _log.Info($"Item parsed: {parsedRSSFeedItem.ItemLink} . {parsedRSSFeedItem.Links.Count} items");
+            _log.LogInformation("Item parsed: {link} . {count} items", parsedRSSFeedItem.ItemLink, parsedRSSFeedItem.Links.Count);
         }
         return parsedRSSFeedItem;
     }

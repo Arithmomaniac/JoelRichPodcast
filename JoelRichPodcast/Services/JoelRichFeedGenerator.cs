@@ -7,11 +7,11 @@ using JoelRichPodcast.Abstract;
 
 namespace JoelRichPodcast.Services;
 
-internal class JoelRichFeedGenerator
+public class JoelRichFeedGenerator
 {
     private readonly ICollection<ILinkParser> _parsers;
 
-    public JoelRichFeedGenerator(params ILinkParser[] parsers) : this((ICollection<ILinkParser>)parsers)
+    public JoelRichFeedGenerator(IEnumerable<ILinkParser> parsers) : this((ICollection<ILinkParser>)parsers.ToList())
     {
     }
 
