@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace JoelRichPodcast.Models;
 
 public class ParsedRSSFeedItem

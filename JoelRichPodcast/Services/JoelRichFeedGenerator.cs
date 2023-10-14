@@ -1,7 +1,4 @@
 using PodcastRssGenerator4DotNet;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using JoelRichPodcast.Models;
 using JoelRichPodcast.Abstract;
 

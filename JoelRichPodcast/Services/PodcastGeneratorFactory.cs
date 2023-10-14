@@ -2,9 +2,6 @@
 using JoelRichPodcast.Models;
 using Microsoft.Extensions.Logging;
 using PodcastRssGenerator4DotNet;
-using System;
-using System.Linq;
-using System.Net.Http;
 using System.Xml.Linq;
 
 namespace JoelRichPodcast.Services;
@@ -20,30 +17,30 @@ public class PodcastGeneratorFactory
         _log = log;
     }
 
-    public RssGenerator GetPodcastGenerator()
+    public async Task<RssGenerator> GetPodcastGenerator()
     {
-        XElement feed = GetFeed();
+        XElement feed = await GetFeed();
         ParsedRSSFeedItem feedInfo = Parse(feed);
         return _feedGenerator.GetPodcastGenerator(feedInfo);
     }
 
-    private static XElement GetFeed()
+    private static async Task<XElement> GetFeed()
     {
         XElement xElement;
         using var client = new HttpClient();
-        using HttpResponseMessage response = client.GetAsync("http://www.torahmusings.com/category/audio/feed" + "?" + Guid.NewGuid()).Result;
+        using HttpResponseMessage response = await client.GetAsync("http://www.torahmusings.com/category/audio/feed" + "?" + Guid.NewGuid());
         using var responseContent = response.Content;
-        var stream = responseContent.ReadAsStringAsync().Result;
+        var stream = await responseContent.ReadAsStringAsync();
         xElement = XElement.Parse(stream);
         return xElement;
     }
 
     private ParsedRSSFeedItem Parse(XElement feed)
     {
-        XElement item = feed.Descendants("item").First(x => !x.Element("title").Value.Contains("Special"));
-        DateTime dateUpdated = DateTime.Parse(item.Element("pubDate").Value);
-        string link = item.Element("link").Value;
-        string content = item.Element(XName.Get("encoded", "http://purl.org/rss/1.0/modules/content/")).Value;
+        XElement item = feed.Descendants("item").First(x => !x.Element("title")!.Value.Contains("Special"));
+        DateTime dateUpdated = DateTime.Parse(item.Element("pubDate")!.Value);
+        string link = item.Element("link")!.Value;
+        string content = item.Element(XName.Get("encoded", "http://purl.org/rss/1.0/modules/content/"))!.Value;
         ParsedRSSFeedItem parsedRSSFeedItem = new ParsedRSSFeedItem
         {
             ItemLink = link,

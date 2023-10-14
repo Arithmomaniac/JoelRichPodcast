@@ -1,5 +1,4 @@
 ﻿using System.Xml;
-using System.IO;
 using System.Text;
 using JoelRichPodcast.Services;
 
@@ -14,9 +13,9 @@ public class JoelRichPodcastGenerator
         _podcastGeneratorFactory = podcastGeneratorFactory;
     }
 
-    public string GetPodcastXml()
+    public async Task<string> GetPodcastXml()
     {
-        var pg = _podcastGeneratorFactory.GetPodcastGenerator();
+        var pg = await _podcastGeneratorFactory.GetPodcastGenerator();
 
         using var ms = new MemoryStream();
         using (var xmlTextWriter = new XmlTextWriter(ms, Encoding.UTF8))

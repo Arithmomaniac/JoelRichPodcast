@@ -3,7 +3,6 @@ using JoelRichPodcast.Abstract;
 using JoelRichPodcast.Decorators;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
-using System.Threading.Tasks;
 
 namespace JoelRichPodcast;
 
@@ -22,7 +21,7 @@ internal class Program
             .Decorate<ILinkParser, LoggedLinkedParser>());
 
         using var host = hostBuilder.Build();
-        host.Services.GetService<JoelRichPodcastGenerator>().GetPodcastXml();
+        await host.Services.GetRequiredService<JoelRichPodcastGenerator>().GetPodcastXml();
     }
 }
 
