@@ -1,4 +1,6 @@
-﻿using CsQuery;
+﻿using AngleSharp;
+using AngleSharp.Dom;
+using AngleSharp.Html.Parser;
 using JoelRichPodcast.Models;
 using Microsoft.Extensions.Logging;
 using PodcastRssGenerator4DotNet;
@@ -21,7 +23,7 @@ public class PodcastGeneratorFactory
     {
         XElement feed = await GetFeed();
         ParsedRSSFeedItem feedInfo = Parse(feed);
-        return _feedGenerator.GetPodcastGenerator(feedInfo);
+        return await _feedGenerator.GetPodcastGenerator(feedInfo);
     }
 
     private static async Task<XElement> GetFeed()
@@ -41,11 +43,15 @@ public class PodcastGeneratorFactory
         DateTime dateUpdated = DateTime.Parse(item.Element("pubDate")!.Value);
         string link = item.Element("link")!.Value;
         string content = item.Element(XName.Get("encoded", "http://purl.org/rss/1.0/modules/content/"))!.Value;
+
+        var parser = new HtmlParser();
+        var document = parser.ParseDocument(content);
+
         ParsedRSSFeedItem parsedRSSFeedItem = new ParsedRSSFeedItem
         {
             ItemLink = link,
             DateUpdated = dateUpdated,
-            Links = CQ.CreateFragment(content).Select("li").Has("a").Select(ParseLink).Where(x => x != null).ToList()
+            Links = document.QuerySelectorAll("li:has(a)").Select(ParseLink).ToList()
         };
         if (parsedRSSFeedItem is not null)
         {
@@ -54,27 +60,18 @@ public class PodcastGeneratorFactory
         return parsedRSSFeedItem;
     }
 
-    private static ParsedRSSFeedLink ParseLink(IDomObject linkNode)
-    {
-        ParsedRSSFeedLink parsedRSSFeedLink;
-        CQ linkCq = new CQ(linkNode.Clone());
-        CQ aCq = linkCq.Find("a");
-        if (aCq.Any())
+    private static ParsedRSSFeedLink ParseLink(IElement linkNode)
+    {        
+        linkNode = (IElement)linkNode.Clone();
+        var aNode = linkNode.QuerySelector("a")!;
+
+        ParsedRSSFeedLink parsedRSSFeedLink = new ParsedRSSFeedLink
         {
-            ParsedRSSFeedLink parsedRSSFeedLink1 = new ParsedRSSFeedLink
-            {
-                LinkURL = aCq.Attr<string>("href"),
-                LinkTitle = aCq.First().Text()
-            };
-            ParsedRSSFeedLink link = parsedRSSFeedLink1;
-            aCq.FirstElement().Remove();
-            link.Description = linkCq.Text().Trim();
-            parsedRSSFeedLink = link;
-        }
-        else
-        {
-            parsedRSSFeedLink = null;
-        }
+            LinkURL = aNode.Attributes["href"]!.Value,
+            LinkTitle = aNode.TextContent
+        };
+        aNode.Remove();
+        parsedRSSFeedLink.Description = linkNode.TextContent.Trim();
         return parsedRSSFeedLink;
     }
 }

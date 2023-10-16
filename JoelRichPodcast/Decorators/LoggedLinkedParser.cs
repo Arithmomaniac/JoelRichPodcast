@@ -18,9 +18,10 @@ public class LoggedLinkedParser : ILinkParser
         _parserClass = parser.GetType().Name;
         _log = log;
     }
-    public Episode ParseLink(ParsedRSSFeedLink link)
+
+    public async Task<Episode> ParseLink(ParsedRSSFeedLink link)
     {
-        var episode = _parser.ParseLink(link);
+        var episode = await _parser.ParseLink(link);
         var parsedVerbiage = episode == null ? "could NOT parse" : "PARSED";
         _log.LogDebug("{parserClass} {parsedVerbiage} {linkURL}", _parserClass, parsedVerbiage, link.LinkURL);
         return episode;

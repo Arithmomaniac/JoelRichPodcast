@@ -1,28 +1,29 @@
-using CsQuery;
 using PodcastRssGenerator4DotNet;
 using JoelRichPodcast.Models;
 using JoelRichPodcast.Abstract;
+using AngleSharp;
+using AngleSharp.Dom;
 
 namespace JoelRichPodcast.Services;
 
 internal class YUTorahLinkParser : ILinkParser
 {
-    public Episode ParseLink(ParsedRSSFeedLink link)
+
+    public async Task<Episode> ParseLink(ParsedRSSFeedLink link)
     {
         if (!(link.LinkURL.StartsWith("https://www.yutorah.org/lectures/") || link.LinkURL.StartsWith("http://www.yutorah.org/sidebar/lecture.cfm/")))
             return null;
 
-        if (!TryGetLinkFile(link.LinkURL, out CQ doc))
+        if (await TryGetLinkFile(link.LinkURL) is not { } doc)
             return null;
 
-        doc = doc[".download a[title=\"Download this shiur\"]"];
-        string downloadurl = doc.Attr("href");
-        if (downloadurl == null)
+        var downloadUrl = doc.QuerySelector(".download a[title=\"Download this shiur\"]")?.GetAttribute("href");
+        if (downloadUrl is null)
             return null;
 
         return new Episode
         {
-            FileUrl = downloadurl,
+            FileUrl = downloadUrl,
             Permalink = link.LinkURL,
             Summary = link.Description,
             PublicationDate = DateTime.MinValue,
@@ -32,17 +33,18 @@ internal class YUTorahLinkParser : ILinkParser
         };
     }
 
-    static bool TryGetLinkFile(string linkURL, out CQ doc)
+    static async Task<IElement> TryGetLinkFile(string linkURL)
     {
         try
         {
-            doc = CQ.CreateFromUrl(linkURL, null);
-            return true;
+            using var browsingContext = BrowsingContext.New(Configuration.Default.WithDefaultLoader());
+            var doc = await browsingContext.OpenAsync(linkURL);
+            return (IElement)doc.DocumentElement.Clone();
+            
         }
         catch
         {
-            doc = null;
-            return false;
+            return null;
         }
     }
 }

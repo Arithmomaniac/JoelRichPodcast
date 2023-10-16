@@ -6,13 +6,13 @@ namespace JoelRichPodcast.Services;
 
 public class MP3LinkParser : ILinkParser
 {
-    public Episode ParseLink(ParsedRSSFeedLink link)
+    public Task<Episode> ParseLink(ParsedRSSFeedLink link)
     {
         if (!link.LinkURL.EndsWith(".mp3"))
             return null;
 
 
-        return new Episode
+        return Task.FromResult(new Episode
         {
             FileUrl = link.LinkURL,
             Permalink = link.LinkURL,
@@ -21,6 +21,6 @@ public class MP3LinkParser : ILinkParser
             Title = link.LinkTitle,
             FileType = "audio/mp3",
             Duration = "0:00",
-        };
+        });
     }
 }

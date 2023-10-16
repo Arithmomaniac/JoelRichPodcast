@@ -19,7 +19,7 @@ public class JoelRichFeedGenerator
         _parsers = parsers;
     }
 
-    public RssGenerator GetPodcastGenerator(ParsedRSSFeedItem items)
+    public async Task<RssGenerator> GetPodcastGenerator(ParsedRSSFeedItem items)
     {
         RssGenerator rssGenerator = new RssGenerator
         {
@@ -39,7 +39,7 @@ public class JoelRichFeedGenerator
         {
             foreach (ILinkParser parser in _parsers)
             {
-                Episode episode = parser.ParseLink(item);
+                Episode episode = await parser.ParseLink(item);
                 if (episode != null)
                 {
                     rssGenerator.Episodes.Add(episode);
