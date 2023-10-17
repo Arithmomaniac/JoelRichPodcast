@@ -53,10 +53,9 @@ public class PodcastGeneratorFactory
             DateUpdated = dateUpdated,
             Links = document.QuerySelectorAll("li:has(a)").Select(ParseLink).ToList()
         };
-        if (parsedRSSFeedItem is not null)
-        {
-            _log.LogInformation("Item parsed: {link} . {count} items", parsedRSSFeedItem.ItemLink, parsedRSSFeedItem.Links.Count);
-        }
+        
+        _log.LogInformation("Item parsed: {link} . {count} items", parsedRSSFeedItem.ItemLink, parsedRSSFeedItem.Links.Count);
+
         return parsedRSSFeedItem;
     }
 
@@ -64,14 +63,10 @@ public class PodcastGeneratorFactory
     {        
         linkNode = (IElement)linkNode.Clone();
         var aNode = linkNode.QuerySelector("a")!;
-
-        ParsedRSSFeedLink parsedRSSFeedLink = new ParsedRSSFeedLink
-        {
-            LinkURL = aNode.Attributes["href"]!.Value,
-            LinkTitle = aNode.TextContent
-        };
+        var (textContent, href) = (aNode.TextContent, aNode.Attributes["href"]!.Value);
         aNode.Remove();
-        parsedRSSFeedLink.Description = linkNode.TextContent.Trim();
+
+        ParsedRSSFeedLink parsedRSSFeedLink = new ParsedRSSFeedLink(linkNode.TextContent.Trim(), textContent, href);
         return parsedRSSFeedLink;
     }
 }

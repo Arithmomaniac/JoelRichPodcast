@@ -5,5 +5,5 @@ namespace JoelRichPodcast.Abstract;
 
 public interface ILinkParser
 {
-    Task<Episode> ParseLink(ParsedRSSFeedLink link);
+    Task<Episode?> ParseLink(ParsedRSSFeedLink link);
 }

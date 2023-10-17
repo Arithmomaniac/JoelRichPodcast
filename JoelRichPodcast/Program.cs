@@ -1,6 +1,5 @@
 using JoelRichPodcast.Services;
 using JoelRichPodcast.Abstract;
-using JoelRichPodcast.Decorators;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,7 +17,7 @@ internal class Program
             .AddSingleton<PodcastGeneratorFactory>()
             .AddScoped<ILinkParser, YUTorahLinkParser>()
             .AddScoped<ILinkParser, MP3LinkParser>()
-            .Decorate<ILinkParser, LoggedLinkedParser>());
+        );
 
         using var host = hostBuilder.Build();
         await host.Services.GetRequiredService<JoelRichPodcastGenerator>().GetPodcastXml();

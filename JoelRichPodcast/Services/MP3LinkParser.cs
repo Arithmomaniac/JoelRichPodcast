@@ -6,13 +6,13 @@ namespace JoelRichPodcast.Services;
 
 public class MP3LinkParser : ILinkParser
 {
-    public Task<Episode> ParseLink(ParsedRSSFeedLink link)
+    public Task<Episode?> ParseLink(ParsedRSSFeedLink link)
     {
         if (!link.LinkURL.EndsWith(".mp3"))
-            return null;
+            return Task.FromResult<Episode?>(null);
 
 
-        return Task.FromResult(new Episode
+        return Task.FromResult<Episode?>(new Episode
         {
             FileUrl = link.LinkURL,
             Permalink = link.LinkURL,

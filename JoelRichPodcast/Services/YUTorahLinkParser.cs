@@ -8,10 +8,16 @@ namespace JoelRichPodcast.Services;
 
 internal class YUTorahLinkParser : ILinkParser
 {
-
-    public async Task<Episode> ParseLink(ParsedRSSFeedLink link)
+    static readonly IReadOnlyList<string> s_ValidUrls = new[]
     {
-        if (!(link.LinkURL.StartsWith("https://www.yutorah.org/lectures/") || link.LinkURL.StartsWith("http://www.yutorah.org/sidebar/lecture.cfm/")))
+        "https://www.yutorah.org/lectures/",
+        "https://yutorah.org/lectures/",
+        "http://www.yutorah.org/sidebar/lecture.cfm/"
+    };
+
+    public async Task<Episode?> ParseLink(ParsedRSSFeedLink link)
+    {
+        if (!s_ValidUrls.Any(link.LinkURL.StartsWith))
             return null;
 
         if (await TryGetLinkFile(link.LinkURL) is not { } doc)
@@ -33,14 +39,13 @@ internal class YUTorahLinkParser : ILinkParser
         };
     }
 
-    static async Task<IElement> TryGetLinkFile(string linkURL)
+    static async Task<IElement?> TryGetLinkFile(string linkURL)
     {
         try
         {
             using var browsingContext = BrowsingContext.New(Configuration.Default.WithDefaultLoader());
             var doc = await browsingContext.OpenAsync(linkURL);
             return (IElement)doc.DocumentElement.Clone();
-            
         }
         catch
         {

@@ -1,22 +1,23 @@
 using PodcastRssGenerator4DotNet;
 using JoelRichPodcast.Models;
 using JoelRichPodcast.Abstract;
+using Microsoft.Extensions.Logging;
 
 namespace JoelRichPodcast.Services;
 
 public class JoelRichFeedGenerator
 {
-    private readonly ICollection<ILinkParser> _parsers;
+    private readonly IReadOnlyList<ILinkParser> _parsers;
+    private readonly ILogger<JoelRichFeedGenerator> _log;
 
-    public JoelRichFeedGenerator(IEnumerable<ILinkParser> parsers) : this((ICollection<ILinkParser>)parsers.ToList())
-    {
-    }
-
-    public JoelRichFeedGenerator(ICollection<ILinkParser> parsers)
+    public JoelRichFeedGenerator(IEnumerable<ILinkParser> parsers, ILogger<JoelRichFeedGenerator> log)
     {
         if (parsers?.Any() != true)
             throw new ArgumentException("parsers are required", nameof(parsers));
-        _parsers = parsers;
+        _parsers = parsers.ToArray();
+       _log = log;
+
+       _log.LogDebug("Parsers: {parsers}", _parsers.Select(p => p.GetType().Name));
     }
 
     public async Task<RssGenerator> GetPodcastGenerator(ParsedRSSFeedItem items)
@@ -37,16 +38,28 @@ public class JoelRichFeedGenerator
 
         foreach (ParsedRSSFeedLink item in items.Links)
         {
+            Episode? episode = null;
             foreach (ILinkParser parser in _parsers)
             {
-                Episode episode = await parser.ParseLink(item);
-                if (episode != null)
+                episode = await parser.ParseLink(item);
+                if (episode is not null)
                 {
-                    rssGenerator.Episodes.Add(episode);
+                    _log.LogDebug("{item} parsed with {parser}", item.LinkURL, parser.GetType().Name);
                     break;
                 }
             }
+
+            if (episode is null)
+            {
+                _log.LogWarning("{item} not parsed by any parser", item.LinkURL);
+            }
+            else
+            {
+                rssGenerator.Episodes.Add(episode);
+            }
         }
+
+        _log.LogInformation("{count} items parsed", rssGenerator.Episodes.Count);
         return rssGenerator;
     }
 }
