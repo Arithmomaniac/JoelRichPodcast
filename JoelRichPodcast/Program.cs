@@ -15,8 +15,9 @@ internal class Program
             .AddSingleton<JoelRichPodcastGenerator>()
             .AddSingleton<JoelRichFeedGenerator>()
             .AddSingleton<PodcastGeneratorFactory>()
-            .AddScoped<ILinkParser, YUTorahLinkParser>()
             .AddScoped<ILinkParser, MP3LinkParser>()
+            .AddScoped<ILinkParser, YUTorahLinkParser>()
+            .AddScoped<ILinkParser, TorahInMotionLinkParser>()
         );
 
         using var host = hostBuilder.Build();
