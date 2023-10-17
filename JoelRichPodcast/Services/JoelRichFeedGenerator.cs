@@ -2,6 +2,7 @@ using PodcastRssGenerator4DotNet;
 using JoelRichPodcast.Models;
 using JoelRichPodcast.Abstract;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 
 namespace JoelRichPodcast.Services;
 
@@ -22,6 +23,27 @@ public class JoelRichFeedGenerator
 
     public async Task<RssGenerator> GetPodcastGenerator(ParsedRSSFeedItem items)
     {
+        ConcurrentBag<Episode> episodes = new();
+
+        await Parallel.ForEachAsync(
+            items.Links,
+            new ParallelOptions { MaxDegreeOfParallelism  = 5 }, 
+            async (item, ct) =>
+        {
+            var episode = await GetParsedEpisode(item);
+
+            if (episode is null)
+            {
+                _log.LogWarning("{item} not parsed by any parser", item.LinkURL);
+            }
+            else
+            {
+                episodes.Add(episode);
+            }
+        });
+
+        _log.LogInformation("{count} items parsed", episodes.Count);
+
         RssGenerator rssGenerator = new RssGenerator
         {
 
@@ -30,36 +52,29 @@ public class JoelRichFeedGenerator
             HomepageUrl = "http://www.torahmusings.com/category/audio/",
             AuthorName = "Joel Rich / Avi Levin",
             AuthorEmail = "email@avilevin.net",
-            Episodes = new List<Episode>(),
+            Episodes = episodes.ToList(),
             ImageUrl = "http://i0.wp.com/torahmusings.com/wp-content/uploads/2013/08/microphone.jpg",
             iTunesCategory = "Temp",
             iTunesSubCategory = "Temp",
         };
 
-        foreach (ParsedRSSFeedLink item in items.Links)
-        {
-            Episode? episode = null;
-            foreach (ILinkParser parser in _parsers)
-            {
-                episode = await parser.ParseLink(item);
-                if (episode is not null)
-                {
-                    _log.LogDebug("{item} parsed with {parser}", item.LinkURL, parser.GetType().Name);
-                    break;
-                }
-            }
 
-            if (episode is null)
+        return rssGenerator;
+    }
+
+    private async Task<Episode?> GetParsedEpisode(ParsedRSSFeedLink item)
+    {
+        Episode? episode = null;
+        foreach (ILinkParser parser in _parsers)
+        {
+            episode = await parser.ParseLink(item);
+            if (episode is not null)
             {
-                _log.LogWarning("{item} not parsed by any parser", item.LinkURL);
-            }
-            else
-            {
-                rssGenerator.Episodes.Add(episode);
+                _log.LogDebug("{item} parsed with {parser}", item.LinkURL, parser.GetType().Name);
+                break;
             }
         }
 
-        _log.LogInformation("{count} items parsed", rssGenerator.Episodes.Count);
-        return rssGenerator;
+        return episode;
     }
 }
