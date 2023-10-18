@@ -18,6 +18,7 @@ internal class Program
             .AddScoped<ILinkParser, MP3LinkParser>()
             .AddScoped<ILinkParser, YUTorahLinkParser>()
             .AddScoped<ILinkParser, TorahInMotionLinkParser>()
+            .AddScoped<ILinkParser, PodbeanLinkParser>()
         );
 
         using var host = hostBuilder.Build();
