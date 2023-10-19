@@ -3,14 +3,24 @@ using JoelRichPodcast.Models;
 using JoelRichPodcast.Abstract;
 using AngleSharp;
 using AngleSharp.Dom;
+using AngleSharp.Html.Parser;
 
 namespace JoelRichPodcast.Services;
 
 internal abstract class OneHopLinkParser : ILinkParser
 {
+    private IHttpClientFactory _httpClientFactory;
+
+    protected OneHopLinkParser(IHttpClientFactory httpClientFactory)
+    {
+        _httpClientFactory = httpClientFactory;
+    }
+
     protected abstract IReadOnlyList<string> ValidUrls { get; }
 
     protected abstract string Selector { get; }
+
+    protected virtual bool UseBrowsingContext { get; } = false;
 
     public async Task<Episode?> ParseLink(ParsedRSSFeedLink link)
     {
@@ -36,13 +46,23 @@ internal abstract class OneHopLinkParser : ILinkParser
         };
     }
 
-    static async Task<IElement?> TryGetLinkFile(string linkURL)
+    async Task<IElement?> TryGetLinkFile(string linkURL)
     {
         try
         {
-            using var browsingContext = BrowsingContext.New(Configuration.Default.WithDefaultLoader());
-            var doc = await browsingContext.OpenAsync(linkURL);
-            return (IElement)doc.DocumentElement.Clone();
+            // TODO: figure out secret sauce that makes this work more often
+            if (UseBrowsingContext)
+            {
+                using var browsingContext = BrowsingContext.New(Configuration.Default.WithDefaultLoader());
+                var doc = await browsingContext.OpenAsync(linkURL);
+                return (IElement)doc.DocumentElement.Clone();
+            }
+            else
+            {
+                var client = _httpClientFactory.CreateClient();
+                var stream = await client.GetStreamAsync(linkURL);
+                return (await new HtmlParser().ParseDocumentAsync(stream)).DocumentElement;
+            }
         }
         catch
         {

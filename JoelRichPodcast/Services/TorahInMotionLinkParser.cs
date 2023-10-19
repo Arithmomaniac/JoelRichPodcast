@@ -1,7 +1,12 @@
-﻿namespace JoelRichPodcast.Services;
+﻿
+namespace JoelRichPodcast.Services;
 
 internal class TorahInMotionLinkParser : OneHopLinkParser
 {
+    public TorahInMotionLinkParser(IHttpClientFactory httpClientFactory) : base(httpClientFactory)
+    {
+    }
+
     protected override IReadOnlyList<string> ValidUrls => new[]
     {
         "https://torahinmotion.org/",

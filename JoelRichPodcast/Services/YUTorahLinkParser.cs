@@ -1,7 +1,12 @@
+
 namespace JoelRichPodcast.Services;
 
 internal class YUTorahLinkParser : OneHopLinkParser
 {
+    public YUTorahLinkParser(IHttpClientFactory httpClientFactory) : base(httpClientFactory)
+    {
+    }
+
     protected override IReadOnlyList<string> ValidUrls => new[]
     {
         "https://www.yutorah.org/lectures/",

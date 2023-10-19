@@ -11,11 +11,13 @@ namespace JoelRichPodcast.Services;
 public class PodcastGeneratorFactory
 {
     readonly JoelRichFeedGenerator _feedGenerator;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger _log;
 
-    public PodcastGeneratorFactory(JoelRichFeedGenerator feedGenerator, ILogger<PodcastGeneratorFactory> log)
+    public PodcastGeneratorFactory(JoelRichFeedGenerator feedGenerator, IHttpClientFactory httpClientFactory, ILogger<PodcastGeneratorFactory> log)
     {
         _feedGenerator = feedGenerator;
+        _httpClientFactory = httpClientFactory;
         _log = log;
     }
 
@@ -26,15 +28,11 @@ public class PodcastGeneratorFactory
         return await _feedGenerator.GetPodcastGenerator(feedInfo);
     }
 
-    private static async Task<XElement> GetFeed()
+    private async Task<XElement> GetFeed()
     {
-        XElement xElement;
-        using var client = new HttpClient();
-        using HttpResponseMessage response = await client.GetAsync("http://www.torahmusings.com/category/audio/feed" + "?" + Guid.NewGuid());
-        using var responseContent = response.Content;
-        var stream = await responseContent.ReadAsStringAsync();
-        xElement = XElement.Parse(stream);
-        return xElement;
+        var client = _httpClientFactory.CreateClient();
+        var stream = await client.GetStreamAsync("http://www.torahmusings.com/category/audio/feed" + "?" + Guid.NewGuid());
+        return await XElement.LoadAsync(stream, LoadOptions.None, CancellationToken.None);
     }
 
     private ParsedRSSFeedItem Parse(XElement feed)
@@ -44,8 +42,7 @@ public class PodcastGeneratorFactory
         string link = item.Element("link")!.Value;
         string content = item.Element(XName.Get("encoded", "http://purl.org/rss/1.0/modules/content/"))!.Value;
 
-        var parser = new HtmlParser();
-        var document = parser.ParseDocument(content);
+        var document = new HtmlParser().ParseDocument(content);
 
         ParsedRSSFeedItem parsedRSSFeedItem = new ParsedRSSFeedItem
         {
