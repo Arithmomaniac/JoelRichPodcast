@@ -63,7 +63,7 @@ public class PodcastGeneratorFactory
         var (textContent, href) = (aNode.TextContent, aNode.Attributes["href"]!.Value);
         aNode.Remove();
 
-        ParsedRSSFeedLink parsedRSSFeedLink = new ParsedRSSFeedLink(linkNode.TextContent.Trim(), textContent, href);
+        ParsedRSSFeedLink parsedRSSFeedLink = new ParsedRSSFeedLink(linkNode.TextContent.Trim(), textContent.Trim(), href.Trim());
         return parsedRSSFeedLink;
     }
 }

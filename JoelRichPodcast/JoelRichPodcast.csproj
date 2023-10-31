@@ -4,6 +4,7 @@
     <OutputType>Exe</OutputType>
 	<ImplicitUsings>enable</ImplicitUsings>
 	<Nullable>enable</Nullable>
+	<UserSecretsId>ca48e0a2-a380-476d-9815-3032e1943db9</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="AngleSharp" Version="1.0.5" />

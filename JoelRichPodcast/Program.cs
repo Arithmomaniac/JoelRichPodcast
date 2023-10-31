@@ -17,6 +17,7 @@ internal class Program
                 .AddSingleton<JoelRichFeedGenerator>()
                 .AddSingleton<PodcastGeneratorFactory>()
                 .AddScoped<ILinkParser, MP3LinkParser>()
+                .AddScoped<ILinkParser, TorahAnytimeParser>()
                 .AddScoped<ILinkParser, YUTorahLinkParser>()
                 .AddScoped<ILinkParser, TorahInMotionLinkParser>()
                 .AddScoped<ILinkParser, PodbeanLinkParser>()

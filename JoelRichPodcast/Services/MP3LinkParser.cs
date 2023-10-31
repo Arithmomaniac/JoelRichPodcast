@@ -8,7 +8,14 @@ public class MP3LinkParser : ILinkParser
 {
     public Task<Episode?> ParseLink(ParsedRSSFeedLink link)
     {
-        if (!link.LinkURL.EndsWith(".mp3"))
+        string? fileType = link.LinkURL.Split('.').LastOrDefault() switch
+        {
+            "mp3" => "audio/mp3",
+            "m4a" => "audio/m4a",
+            _ => null
+        };
+
+        if (fileType == null)
             return Task.FromResult<Episode?>(null);
 
 
@@ -19,7 +26,7 @@ public class MP3LinkParser : ILinkParser
             Summary = link.Description,
             PublicationDate = DateTime.MinValue,
             Title = link.LinkTitle,
-            FileType = "audio/mp3",
+            FileType = fileType,
             Duration = "0:00",
         });
     }
