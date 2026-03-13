@@ -316,6 +316,14 @@ paket-files/
 __pycache__/
 *.pyc
 
+# Python vendored dependencies (bundled at build time)
+python_libs/
+
+# Azure Functions
+local.settings.json
+deploy.zip
+publish/
+
 # Cake - Uncomment if you are using it
 # tools/**
 # !tools/packages.config

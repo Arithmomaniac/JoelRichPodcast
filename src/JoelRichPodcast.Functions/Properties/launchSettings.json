@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "JoelRichPodcast.Functions": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7252",
+      "launchBrowser": false
+    }
+  }
+}

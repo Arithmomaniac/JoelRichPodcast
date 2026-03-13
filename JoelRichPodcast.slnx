@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/JoelRichPodcast.Functions/JoelRichPodcast.Functions.csproj" />
+  </Folder>
+</Solution>
