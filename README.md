@@ -2,6 +2,8 @@
 
 Converts Joel Rich's [Audio Roundup](https://www.torahmusings.com/category/audio/) picks from Torah Musings into a subscribable podcast RSS feed.
 
+**📡 Feed URL:** [`https://joelrichpodcastst.z13.web.core.windows.net/feed.xml`](https://joelrichpodcastst.z13.web.core.windows.net/feed.xml)
+
 ## Architecture
 
 ```
