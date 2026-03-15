@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using JoelRichPodcast.Functions.Models;
 using Microsoft.Extensions.Logging;
 
@@ -16,8 +17,15 @@ public class TorahDlResolver(ILogger<TorahDlResolver> logger)
     /// Resolves a Torah website URL to a direct audio download URL using torah-dl.
     /// Falls back to the original URL if it's already a direct audio link.
     /// </summary>
+    // torah-dl doesn't recognize the legacy lecture.cfm URL format used by Torah Musings
+    private static readonly Regex YutorahLectureCfmPattern = new(
+        @"(https?://(?:www\.)?yutorah\.org)/lectures/lecture\.cfm/(\d+)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     public async Task<TorahDlResult?> ResolveAsync(string url)
     {
+        url = NormalizeUrl(url);
+
         // Fast path: direct audio file links don't need torah-dl
         if (IsDirectAudioLink(url))
         {
@@ -90,6 +98,13 @@ public class TorahDlResolver(ILogger<TorahDlResolver> logger)
             return null;
         }
     }
+
+    /// <summary>
+    /// Normalizes URLs to formats that torah-dl can handle.
+    /// YUTorah lecture.cfm/ID → /lectures/ID
+    /// </summary>
+    internal static string NormalizeUrl(string url) =>
+        YutorahLectureCfmPattern.Replace(url, "$1/lectures/$2");
 
     private static bool IsDirectAudioLink(string url)
     {
