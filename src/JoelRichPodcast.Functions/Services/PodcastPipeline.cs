@@ -84,6 +84,10 @@ public class PodcastPipeline(
         {
             logger.LogError("Zero episodes resolved out of {Total} links — all torah-dl resolutions failed", links.Count);
         }
+        else if (failed > 0 && failed > links.Count / 2)
+        {
+            logger.LogError("High failure rate: {Failed}/{Total} links failed to resolve — possible torah-dl or site issue", failed, links.Count);
+        }
 
         // 5. Read all episodes and generate RSS
         var allEpisodes = new List<EpisodeEntity>();

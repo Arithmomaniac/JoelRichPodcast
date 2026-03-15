@@ -101,3 +101,43 @@ resource errorLogAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-previe
     }
   }
 }
+
+// Alert: Daily digest of torah-dl resolution failures.
+// Since Audio Roundup posts weekly (Tuesdays), this effectively produces
+// a weekly notification of which URLs could not be resolved.
+resource resolutionFailureDigest 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview' = {
+  name: '${functionAppName}-resolution-failures'
+  location: location
+  properties: {
+    displayName: '${functionAppName}: Torah-dl resolution failures'
+    description: 'Summarizes URLs that torah-dl could not resolve in the past 24 hours. Review to identify patterns and propose upstream fixes.'
+    severity: 3
+    enabled: true
+    evaluationFrequency: 'P1D'
+    windowSize: 'P1D'
+    scopes: [appInsightsId]
+    criteria: {
+      allOf: [
+        {
+          query: '''
+            traces
+            | where message has "Could not resolve:"
+            | project timestamp, url = tostring(customDimensions["Url"]), title = tostring(customDimensions["Title"])
+            | summarize failureCount = count(), urls = make_set(url, 50) by bin(timestamp, 1d)
+          '''
+          timeAggregation: 'Count'
+          operator: 'GreaterThan'
+          threshold: 0
+          failingPeriods: {
+            numberOfEvaluationPeriods: 1
+            minFailingPeriodsToAlert: 1
+          }
+        }
+      ]
+    }
+    autoMitigate: true
+    actions: {
+      actionGroups: [actionGroup.id]
+    }
+  }
+}
