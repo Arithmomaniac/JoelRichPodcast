@@ -1,4 +1,4 @@
-@description('Function App name')
+@description('Torah-dl API Function App name')
 param functionAppName string
 
 @description('Function plan name')
@@ -7,23 +7,17 @@ param functionPlanName string
 @description('Azure region')
 param location string
 
-@description('Storage account name (for AzureWebJobsStorage and app data)')
+@description('Storage account name')
 param storageAccountName string
 
 @description('Application Insights connection string')
 param appInsightsConnectionString string
 
-@description('Static website endpoint for the storage account')
-param staticWebsiteUrl string
-
-@description('Torah-dl API base URL')
-param torahDlApiUrl string
-
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
   name: storageAccountName
 }
 
-// Flex Consumption plan
+// Separate Flex Consumption plan for Python runtime
 resource functionPlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: functionPlanName
   location: location
@@ -32,7 +26,7 @@ resource functionPlan 'Microsoft.Web/serverfarms@2023-12-01' = {
     tier: 'FlexConsumption'
   }
   properties: {
-    reserved: true // Linux
+    reserved: true
   }
 }
 
@@ -48,23 +42,17 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
     httpsOnly: true
     functionAppConfig: {
       scaleAndConcurrency: {
-        maximumInstanceCount: 40
+        maximumInstanceCount: 10
         instanceMemoryMB: 512
-        alwaysReady: [
-          {
-            name: 'timer'
-            instanceCount: 1
-          }
-        ]
       }
       runtime: {
-        name: 'dotnet-isolated'
-        version: '10.0'
+        name: 'python'
+        version: '3.12'
       }
       deployment: {
         storage: {
           type: 'blobContainer'
-          value: '${storageAccount.properties.primaryEndpoints.blob}deploymentpackage'
+          value: '${storageAccount.properties.primaryEndpoints.blob}torahdlapi-deploy'
           authentication: {
             type: 'SystemAssignedIdentity'
           }
@@ -81,18 +69,6 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: appInsightsConnectionString
         }
-        {
-          name: 'StorageAccountName'
-          value: storageAccountName
-        }
-        {
-          name: 'StaticWebsiteUrl'
-          value: staticWebsiteUrl
-        }
-        {
-          name: 'TorahDlApiUrl'
-          value: torahDlApiUrl
-        }
       ]
     }
   }
@@ -100,13 +76,13 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
 
 // Deployment package container
 resource deployContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
-  name: '${storageAccountName}/default/deploymentpackage'
+  name: '${storageAccountName}/default/torahdlapi-deploy'
   properties: {
     publicAccess: 'None'
   }
 }
 
-// RBAC: Storage Blob Data Owner for the Function App
+// RBAC: Storage Blob Data Owner for deployment
 var storageBlobDataOwnerRole = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
 resource funcBlobRbac 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(storageAccount.id, functionApp.id, storageBlobDataOwnerRole)
@@ -118,17 +94,5 @@ resource funcBlobRbac 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
-// RBAC: Storage Table Data Contributor for the Function App
-var storageTableDataContributorRole = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
-resource funcTableRbac 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storageAccount.id, functionApp.id, storageTableDataContributorRole)
-  scope: storageAccount
-  properties: {
-    principalId: functionApp.identity.principalId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageTableDataContributorRole)
-    principalType: 'ServicePrincipal'
-  }
-}
-
 output functionAppName string = functionApp.name
-output functionAppPrincipalId string = functionApp.identity.principalId
+output functionAppUrl string = 'https://${functionApp.properties.defaultHostName}'

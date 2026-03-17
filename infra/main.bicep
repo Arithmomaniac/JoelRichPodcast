@@ -18,6 +18,8 @@ var resourceGroupName = '${environmentName}-rg'
 var storageAccountName = replace(toLower('${environmentName}st'), '-', '')
 var functionAppName = '${environmentName}-func'
 var functionPlanName = '${environmentName}-plan'
+var torahDlApiAppName = '${environmentName}-torahdl'
+var torahDlApiPlanName = '${environmentName}-torahdl-plan'
 var logAnalyticsName = '${environmentName}-logs'
 var appInsightsName = '${environmentName}-ai'
 
@@ -56,6 +58,19 @@ module functionApp 'modules/functionapp.bicep' = {
     storageAccountName: storage.outputs.storageAccountName
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     staticWebsiteUrl: storage.outputs.staticWebsiteUrl
+    torahDlApiUrl: torahDlApi.outputs.functionAppUrl
+  }
+}
+
+module torahDlApi 'modules/torahdl-api.bicep' = {
+  name: 'torahdl-api'
+  scope: rg
+  params: {
+    functionAppName: torahDlApiAppName
+    functionPlanName: torahDlApiPlanName
+    location: location
+    storageAccountName: storage.outputs.storageAccountName
+    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
   }
 }
 

@@ -34,13 +34,17 @@ public class PodcastPipeline(
             logger.LogWarning("No links found in Audio Roundup — feed may be empty or format changed");
         }
 
-        // 2. Resolve each link to a direct audio URL via torah-dl
+        // 2. Resolve all links to direct audio URLs via torah-dl (batch)
         var resolved = 0;
         var failed = 0;
         var httpClient = httpClientFactory.CreateClient("AudioMetadata");
+
+        var linkUrls = links.Select(l => l.LinkUrl).ToList();
+        var resolutions = await torahDl.ResolveBatchAsync(linkUrls);
+
         foreach (var link in links)
         {
-            var result = await torahDl.ResolveAsync(link.LinkUrl);
+            var result = resolutions.GetValueOrDefault(link.LinkUrl);
             if (result?.DownloadUrl is null)
             {
                 logger.LogWarning("Could not resolve: {Url} ({Title})", link.LinkUrl, link.LinkTitle);

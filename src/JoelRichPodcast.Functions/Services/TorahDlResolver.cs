@@ -1,102 +1,133 @@
-using System.Diagnostics;
+using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using JoelRichPodcast.Functions.Models;
 using Microsoft.Extensions.Logging;
 
 namespace JoelRichPodcast.Functions.Services;
 
-public class TorahDlResolver(ILogger<TorahDlResolver> logger)
+public class TorahDlResolver(
+    IHttpClientFactory httpClientFactory,
+    ILogger<TorahDlResolver> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    /// <summary>
-    /// Resolves a Torah website URL to a direct audio download URL using torah-dl.
-    /// Falls back to the original URL if it's already a direct audio link.
-    /// </summary>
     // torah-dl doesn't recognize the legacy lecture.cfm URL format used by Torah Musings
     private static readonly Regex YutorahLectureCfmPattern = new(
         @"(https?://(?:www\.)?yutorah\.org)/lectures/lecture\.cfm/(\d+)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    public async Task<TorahDlResult?> ResolveAsync(string url)
+    /// <summary>
+    /// Resolves multiple URLs to direct audio download URLs in a single batch HTTP call.
+    /// Direct audio links are resolved locally (fast path); the rest are sent to the torah-dl API.
+    /// Returns a dictionary keyed by original URL.
+    /// </summary>
+    public async Task<Dictionary<string, TorahDlResult?>> ResolveBatchAsync(IReadOnlyList<string> urls)
     {
-        url = NormalizeUrl(url);
+        var results = new Dictionary<string, TorahDlResult?>(urls.Count);
+        var apiUrls = new List<(string original, string normalized)>();
 
-        // Fast path: direct audio file links don't need torah-dl
-        if (IsDirectAudioLink(url))
+        foreach (var url in urls)
         {
-            var ext = Path.GetExtension(new Uri(url).AbsolutePath).TrimStart('.');
-            var contentType = ext switch
+            var normalized = NormalizeUrl(url);
+
+            if (IsDirectAudioLink(normalized))
             {
-                "mp3" => "audio/mpeg",
-                "m4a" => "audio/mp4",
-                "wav" => "audio/wav",
-                "ogg" => "audio/ogg",
-                _ => "audio/mpeg"
-            };
-            return new TorahDlResult(url, null, contentType, Path.GetFileName(new Uri(url).AbsolutePath));
+                var ext = Path.GetExtension(new Uri(normalized).AbsolutePath).TrimStart('.');
+                var contentType = ext switch
+                {
+                    "mp3" => "audio/mpeg",
+                    "m4a" => "audio/mp4",
+                    "wav" => "audio/wav",
+                    "ogg" => "audio/ogg",
+                    _ => "audio/mpeg"
+                };
+                results[url] = new TorahDlResult(
+                    normalized, null, contentType, Path.GetFileName(new Uri(normalized).AbsolutePath));
+            }
+            else
+            {
+                apiUrls.Add((url, normalized));
+            }
         }
+
+        if (apiUrls.Count == 0)
+            return results;
 
         try
         {
-            var scriptPath = GetScriptPath();
-            var pythonLibsPath = GetPythonLibsPath();
+            var client = httpClientFactory.CreateClient("TorahDlApi");
+            var payload = apiUrls.Select(u => u.normalized).ToList();
+            var response = await client.PostAsJsonAsync("api/resolve", payload);
 
-            var startInfo = new ProcessStartInfo
+            if (!response.IsSuccessStatusCode)
             {
-                FileName = GetPythonExecutable(),
-                ArgumentList = { scriptPath, url },
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            // Add vendored python_libs to PYTHONPATH so torah-dl can be found
-            if (Directory.Exists(pythonLibsPath))
-            {
-                var existingPythonPath = Environment.GetEnvironmentVariable("PYTHONPATH") ?? "";
-                startInfo.Environment["PYTHONPATH"] = string.IsNullOrEmpty(existingPythonPath)
-                    ? pythonLibsPath
-                    : $"{pythonLibsPath}{Path.PathSeparator}{existingPythonPath}";
+                logger.LogError("torah-dl API returned {Status}", response.StatusCode);
+                foreach (var (original, _) in apiUrls)
+                    results[original] = null;
+                return results;
             }
 
-            using var process = Process.Start(startInfo);
-            if (process is null)
+            var apiResults = await response.Content.ReadFromJsonAsync<List<ApiResolveResult>>(JsonOptions);
+            if (apiResults is null)
             {
-                logger.LogWarning("Failed to start python process for URL: {Url}", url);
-                return null;
+                logger.LogError("torah-dl API returned null response body");
+                foreach (var (original, _) in apiUrls)
+                    results[original] = null;
+                return results;
             }
 
-            var stdout = await process.StandardOutput.ReadToEndAsync();
-            var stderr = await process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            if (process.ExitCode != 0)
+            if (apiResults.Count != apiUrls.Count)
             {
-                logger.LogWarning("torah-dl failed for {Url}: {Error}", url, stderr);
-                return null;
+                logger.LogWarning("torah-dl API returned {Count} results for {Expected} URLs — processing available results",
+                    apiResults.Count, apiUrls.Count);
             }
 
-            var result = JsonSerializer.Deserialize<TorahDlResult>(stdout, JsonOptions);
-            if (result?.DownloadUrl is null)
+            // Match results by URL field rather than position, so partial responses still work
+            var resultsByUrl = new Dictionary<string, ApiResolveResult>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in apiResults)
             {
-                logger.LogWarning("torah-dl returned no download URL for {Url}: {Output}", url, stdout);
-                return null;
+                if (r.Url is not null)
+                    resultsByUrl[r.Url] = r;
             }
 
-            logger.LogDebug("Resolved {Url} → {DownloadUrl}", url, result.DownloadUrl);
-            return result;
+            foreach (var (original, normalized) in apiUrls)
+            {
+                if (!resultsByUrl.TryGetValue(normalized, out var apiResult))
+                {
+                    logger.LogWarning("No result returned for {Url}", original);
+                    results[original] = null;
+                }
+                else if (apiResult.Error is not null)
+                {
+                    logger.LogWarning("Could not resolve: {Url} — {Error}", original, apiResult.Error);
+                    results[original] = null;
+                }
+                else if (apiResult.DownloadUrl is null)
+                {
+                    logger.LogWarning("torah-dl returned no download URL for {Url}", original);
+                    results[original] = null;
+                }
+                else
+                {
+                    results[original] = new TorahDlResult(
+                        apiResult.DownloadUrl, apiResult.Title, apiResult.FileFormat, apiResult.FileName);
+                }
+            }
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "torah-dl resolution failed for {Url}", url);
-            return null;
+            logger.LogError(ex, "torah-dl API batch resolution failed");
+            foreach (var (original, _) in apiUrls)
+                results.TryAdd(original, null);
         }
+
+        return results;
     }
 
     /// <summary>
@@ -120,26 +151,11 @@ public class TorahDlResolver(ILogger<TorahDlResolver> logger)
         }
     }
 
-    private static string GetPythonExecutable()
-    {
-        var configured = Environment.GetEnvironmentVariable("PYTHON_PATH");
-        if (!string.IsNullOrEmpty(configured))
-            return configured;
-
-        // Linux (Azure Functions) typically has python3; Windows may use python
-        return OperatingSystem.IsWindows() ? "python" : "python3";
-    }
-
-    private static string GetScriptPath()
-    {
-        // Script is deployed alongside the .NET output
-        var baseDir = AppContext.BaseDirectory;
-        return Path.Combine(baseDir, "python", "resolve_url.py");
-    }
-
-    private static string GetPythonLibsPath()
-    {
-        var baseDir = AppContext.BaseDirectory;
-        return Path.Combine(baseDir, "python_libs");
-    }
+    private record ApiResolveResult(
+        string? Url,
+        string? DownloadUrl,
+        string? Title,
+        string? FileFormat,
+        string? FileName,
+        string? Error);
 }

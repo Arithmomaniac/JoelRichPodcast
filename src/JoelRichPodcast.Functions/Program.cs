@@ -49,6 +49,14 @@ builder.Services.AddHttpClient("AudioMetadata", client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
+// Torah-dl resolution API (Python function app)
+var torahDlApiUrl = Environment.GetEnvironmentVariable("TorahDlApiUrl") ?? "http://localhost:7072";
+builder.Services.AddHttpClient("TorahDlApi", client =>
+{
+    client.BaseAddress = new Uri(torahDlApiUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromMinutes(5);
+});
+
 // Services
 builder.Services.AddSingleton<TorahDlResolver>();
 builder.Services.AddSingleton<TorahMusingsFeedParser>();
