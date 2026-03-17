@@ -52,7 +52,7 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
         instanceMemoryMB: 512
         alwaysReady: [
           {
-            name: 'timer'
+            name: 'function:ScrapeAndPublish'
             instanceCount: 1
           }
         ]
