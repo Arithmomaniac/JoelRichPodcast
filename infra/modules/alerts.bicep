@@ -20,7 +20,7 @@ resource actionGroup 'Microsoft.Insights/actionGroups@2023-01-01' = {
       {
         name: 'PodcastAdmin'
         emailAddress: alertEmail
-        useCommonAlertSchema: true
+        useCommonAlertSchema: false
       }
     ]
   }
@@ -31,8 +31,8 @@ resource functionFailureAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15
   name: '${functionAppName}-function-failure'
   location: location
   properties: {
-    displayName: '${functionAppName}: Function execution failed'
-    description: 'Fires when any function invocation fails (exception or error status).'
+    displayName: 'Joel Rich Podcast: Function execution failed'
+    description: 'A podcast pipeline function invocation failed. Check App Insights for details.'
     severity: 1
     enabled: true
     evaluationFrequency: 'PT5M'
@@ -45,11 +45,16 @@ resource functionFailureAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15
             requests
             | where success == false
             | where cloud_RoleName =~ "${functionAppName}"
-            | summarize failureCount = count() by bin(timestamp, 5m)
+            | project timestamp, name, resultCode, duration, id
+            | summarize failureCount = count(), functions = make_set(name, 10), lastResultCode = take_any(resultCode) by bin(timestamp, 5m)
           '''
           timeAggregation: 'Count'
           operator: 'GreaterThan'
           threshold: 0
+          dimensions: [
+            { name: 'functions', operator: 'Include', values: ['*'] }
+            { name: 'lastResultCode', operator: 'Include', values: ['*'] }
+          ]
           failingPeriods: {
             numberOfEvaluationPeriods: 1
             minFailingPeriodsToAlert: 1
@@ -69,8 +74,8 @@ resource errorLogAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-previe
   name: '${functionAppName}-error-logs'
   location: location
   properties: {
-    displayName: '${functionAppName}: Errors in application logs'
-    description: 'Fires when LogError calls appear in traces — covers blob upload, table upsert, and scraper failures.'
+    displayName: 'Joel Rich Podcast: Errors in application logs'
+    description: 'LogError calls appeared in traces — may indicate blob upload, table upsert, scraper, or torah-dl API failures.'
     severity: 2
     enabled: true
     evaluationFrequency: 'PT15M'
@@ -83,11 +88,15 @@ resource errorLogAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-previe
             traces
             | where severityLevel >= 3
             | where cloud_RoleName =~ "${functionAppName}"
-            | summarize errorCount = count() by bin(timestamp, 15m)
+            | project timestamp, message = substring(message, 0, 200)
+            | summarize errorCount = count(), errors = make_set(message, 10) by bin(timestamp, 15m)
           '''
           timeAggregation: 'Count'
           operator: 'GreaterThan'
           threshold: 0
+          dimensions: [
+            { name: 'errors', operator: 'Include', values: ['*'] }
+          ]
           failingPeriods: {
             numberOfEvaluationPeriods: 1
             minFailingPeriodsToAlert: 1
@@ -109,8 +118,8 @@ resource resolutionFailureDigest 'Microsoft.Insights/scheduledQueryRules@2023-03
   name: '${functionAppName}-resolution-failures'
   location: location
   properties: {
-    displayName: '${functionAppName}: Torah-dl resolution failures'
-    description: 'Summarizes URLs that torah-dl could not resolve in the past 24 hours. Review to identify patterns and propose upstream fixes.'
+    displayName: 'Joel Rich Podcast: Torah-dl resolution failures'
+    description: 'Some Audio Roundup URLs could not be resolved to direct audio links. These episodes will be missing from the podcast feed.'
     severity: 3
     enabled: true
     evaluationFrequency: 'P1D'
@@ -122,8 +131,49 @@ resource resolutionFailureDigest 'Microsoft.Insights/scheduledQueryRules@2023-03
           query: '''
             traces
             | where message has "Could not resolve:"
-            | project timestamp, url = tostring(customDimensions["Url"]), title = tostring(customDimensions["Title"])
-            | summarize failureCount = count(), urls = make_set(url, 50) by bin(timestamp, 1d)
+            | extend url = tostring(customDimensions["Url"]), title = tostring(customDimensions["Title"])
+            | project timestamp, failedUrl = iff(isempty(url), extract(@"Could not resolve: (.+?)( \(|$)", 1, message), url)
+            | summarize failureCount = count(), failedUrls = make_set(failedUrl, 20) by bin(timestamp, 1d)
+          '''
+          timeAggregation: 'Count'
+          operator: 'GreaterThan'
+          threshold: 0
+          dimensions: [
+            { name: 'failedUrls', operator: 'Include', values: ['*'] }
+          ]
+          failingPeriods: {
+            numberOfEvaluationPeriods: 1
+            minFailingPeriodsToAlert: 1
+          }
+        }
+      ]
+    }
+    autoMitigate: false
+    actions: {
+      actionGroups: [actionGroup.id]
+    }
+  }
+}
+
+// Alert: No links extracted from Audio Roundup (format may have changed again)
+resource noLinksAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview' = {
+  name: '${functionAppName}-no-links-found'
+  location: location
+  properties: {
+    displayName: 'Joel Rich Podcast: No links extracted from Audio Roundup'
+    description: 'The feed parser found an Audio Roundup post but extracted zero links. The HTML format may have changed. Check the RSS content:encoded HTML and update TorahMusingsFeedParser.ParseHtmlLinks().'
+    severity: 2
+    enabled: true
+    evaluationFrequency: 'PT6H'
+    windowSize: 'PT6H'
+    scopes: [appInsightsId]
+    criteria: {
+      allOf: [
+        {
+          query: '''
+            traces
+            | where message has "No links found in Audio Roundup"
+            | summarize hitCount = count() by bin(timestamp, 6h)
           '''
           timeAggregation: 'Count'
           operator: 'GreaterThan'
@@ -135,7 +185,7 @@ resource resolutionFailureDigest 'Microsoft.Insights/scheduledQueryRules@2023-03
         }
       ]
     }
-    autoMitigate: false
+    autoMitigate: true
     actions: {
       actionGroups: [actionGroup.id]
     }
