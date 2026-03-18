@@ -46,7 +46,7 @@ resource functionFailureAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15
             | where success == false
             | where cloud_RoleName =~ "${functionAppName}"
             | project timestamp, name, resultCode, duration, id
-            | summarize failureCount = count(), functions = make_set(name, 10), lastResultCode = take_any(resultCode) by bin(timestamp, 5m)
+            | summarize failureCount = count(), functions = strcat_array(make_set(name, 10), ', '), lastResultCode = take_any(resultCode) by bin(timestamp, 5m)
           '''
           timeAggregation: 'Count'
           operator: 'GreaterThan'
@@ -89,7 +89,7 @@ resource errorLogAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-previe
             | where severityLevel >= 3
             | where cloud_RoleName =~ "${functionAppName}"
             | project timestamp, message = substring(message, 0, 200)
-            | summarize errorCount = count(), errors = make_set(message, 10) by bin(timestamp, 15m)
+            | summarize errorCount = count(), errors = strcat_array(make_set(message, 10), ' | ') by bin(timestamp, 15m)
           '''
           timeAggregation: 'Count'
           operator: 'GreaterThan'
@@ -133,7 +133,7 @@ resource resolutionFailureDigest 'Microsoft.Insights/scheduledQueryRules@2023-03
             | where message has "Could not resolve:"
             | extend url = tostring(customDimensions["Url"]), title = tostring(customDimensions["Title"])
             | project timestamp, failedUrl = iff(isempty(url), extract(@"Could not resolve: (.+?)( \(|$)", 1, message), url)
-            | summarize failureCount = count(), failedUrls = make_set(failedUrl, 20) by bin(timestamp, 1d)
+            | summarize failureCount = count(), failedUrls = strcat_array(make_set(failedUrl, 20), ', ') by bin(timestamp, 1d)
           '''
           timeAggregation: 'Count'
           operator: 'GreaterThan'
