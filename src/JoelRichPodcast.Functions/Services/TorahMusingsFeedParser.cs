@@ -48,6 +48,7 @@ public class TorahMusingsFeedParser(
         var document = new HtmlParser().ParseDocument(htmlContent);
         var results = new List<AudioRoundupLink>();
 
+        // Old format: <li><a href="URL">Title</a> Description</li>
         foreach (var li in document.QuerySelectorAll("li:has(a)"))
         {
             var clone = (AngleSharp.Dom.IElement)li.Clone();
@@ -60,8 +61,33 @@ public class TorahMusingsFeedParser(
             if (string.IsNullOrWhiteSpace(linkUrl))
                 continue;
 
-            // Remove the anchor to get the surrounding description text
             anchor.Remove();
+            var description = clone.TextContent.Trim();
+
+            results.Add(new AudioRoundupLink(
+                Description: description,
+                LinkTitle: linkTitle,
+                LinkUrl: linkUrl,
+                PublishDate: publishDate,
+                RoundupUrl: roundupUrl));
+        }
+
+        // Current format: <p><a href="URL">URL</a><br><strong>Title</strong><br>Description</p>
+        foreach (var p in document.QuerySelectorAll("p:has(a):has(strong)"))
+        {
+            var anchor = p.QuerySelector("a");
+            var strong = p.QuerySelector("strong");
+            if (anchor is null || strong is null) continue;
+
+            var linkUrl = anchor.GetAttribute("href")?.Trim();
+            var linkTitle = strong.TextContent.Trim();
+
+            if (string.IsNullOrWhiteSpace(linkUrl))
+                continue;
+
+            var clone = (AngleSharp.Dom.IElement)p.Clone();
+            clone.QuerySelector("a")?.Remove();
+            clone.QuerySelector("strong")?.Remove();
             var description = clone.TextContent.Trim();
 
             results.Add(new AudioRoundupLink(
