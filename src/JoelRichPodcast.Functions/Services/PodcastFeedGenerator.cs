@@ -19,7 +19,8 @@ public class PodcastFeedGenerator
     public string GenerateFeed(IEnumerable<EpisodeEntity> episodes, string selfUrl)
     {
         var items = episodes
-            .OrderByDescending(e => e.PublishDate)
+            .OrderByDescending(e => e.RoundupUrl)
+            .ThenBy(e => e.RoundupIndex ?? 0)
             .Take(200)
             .Select(BuildItem);
 

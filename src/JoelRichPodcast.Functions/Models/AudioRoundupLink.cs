@@ -5,4 +5,5 @@ public record AudioRoundupLink(
     string LinkTitle,
     string LinkUrl,
     DateTimeOffset PublishDate,
-    string RoundupUrl);
+    string RoundupUrl,
+    int RoundupIndex);

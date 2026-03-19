@@ -62,7 +62,8 @@ public class PodcastPipeline(
                     ? link.LinkTitle
                     : $"{link.LinkTitle} — {link.Description}",
                 PublishDate = link.PublishDate,
-                RoundupUrl = link.RoundupUrl
+                RoundupUrl = link.RoundupUrl,
+                RoundupIndex = link.RoundupIndex
             };
 
             // 3. Populate audio metadata via HTTP HEAD

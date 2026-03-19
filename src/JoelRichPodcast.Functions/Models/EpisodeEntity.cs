@@ -18,6 +18,7 @@ public class EpisodeEntity : ITableEntity
     public string? SourceUrl { get; set; }
     public string? Description { get; set; }
     public string? RoundupUrl { get; set; }
+    public int? RoundupIndex { get; set; }
 
     public static string MakeRowKey(DateTimeOffset date, string title)
     {

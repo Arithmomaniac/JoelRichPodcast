@@ -69,7 +69,8 @@ public class TorahMusingsFeedParser(
                 LinkTitle: linkTitle,
                 LinkUrl: linkUrl,
                 PublishDate: publishDate,
-                RoundupUrl: roundupUrl));
+                RoundupUrl: roundupUrl,
+                RoundupIndex: results.Count));
         }
 
         // Current format: <p><a href="URL">URL</a><br><strong>Title</strong><br>Description</p>
@@ -95,7 +96,8 @@ public class TorahMusingsFeedParser(
                 LinkTitle: linkTitle,
                 LinkUrl: linkUrl,
                 PublishDate: publishDate,
-                RoundupUrl: roundupUrl));
+                RoundupUrl: roundupUrl,
+                RoundupIndex: results.Count));
         }
 
         return results;
