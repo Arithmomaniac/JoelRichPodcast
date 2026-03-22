@@ -1,11 +1,12 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using JoelRichPodcast.Functions.Models;
 using Microsoft.Extensions.Logging;
 
 namespace JoelRichPodcast.Functions.Services;
 
-public class TorahDlResolver(ILogger<TorahDlResolver> logger)
+public partial class TorahDlResolver(ILogger<TorahDlResolver> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -13,11 +14,26 @@ public class TorahDlResolver(ILogger<TorahDlResolver> logger)
     };
 
     /// <summary>
+    /// Sites that are recognized but require authentication or are otherwise unsupported
+    /// by torah-dl. URLs matching these patterns are skipped silently (Debug-level log)
+    /// rather than producing Warning-level "Could not resolve" messages.
+    /// </summary>
+    [GeneratedRegex(@"https?://(?:www\.)?torahinmotion\.org/", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex UnsupportedSitePattern();
+
+    /// <summary>
     /// Resolves a Torah website URL to a direct audio download URL using torah-dl.
     /// Falls back to the original URL if it's already a direct audio link.
     /// </summary>
     public async Task<TorahDlResult?> ResolveAsync(string url)
     {
+        // Skip known-unsupported sites silently (no Warning, no alert noise)
+        if (UnsupportedSitePattern().IsMatch(url))
+        {
+            logger.LogDebug("Skipping unsupported site: {Url}", url);
+            return null;
+        }
+
         // Fast path: direct audio file links don't need torah-dl
         if (IsDirectAudioLink(url))
         {
@@ -90,6 +106,12 @@ public class TorahDlResolver(ILogger<TorahDlResolver> logger)
             return null;
         }
     }
+
+    /// <summary>
+    /// Returns true if the URL belongs to a known-but-unsupported site (e.g. requires login).
+    /// Used by the pipeline to decide log level when resolution returns null.
+    /// </summary>
+    public static bool IsUnsupportedSite(string url) => UnsupportedSitePattern().IsMatch(url);
 
     private static bool IsDirectAudioLink(string url)
     {
