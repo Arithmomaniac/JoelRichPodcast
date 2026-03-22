@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace JoelRichPodcast.Functions.Services;
 
-public class TorahDlResolver(
+public partial class TorahDlResolver(
     IHttpClientFactory httpClientFactory,
     ILogger<TorahDlResolver> logger)
 {
@@ -23,6 +23,14 @@ public class TorahDlResolver(
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>
+    /// Sites that are recognized but require authentication or are otherwise unsupported
+    /// by torah-dl. URLs matching these patterns are skipped silently (Debug-level log)
+    /// rather than producing Warning-level "Could not resolve" messages.
+    /// </summary>
+    [GeneratedRegex(@"https?://(?:www\.)?torahinmotion\.org/", RegexOptions.IgnoreCase)]
+    private static partial Regex UnsupportedSitePattern();
+
+    /// <summary>
     /// Resolves multiple URLs to direct audio download URLs in a single batch HTTP call.
     /// Direct audio links are resolved locally (fast path); the rest are sent to the torah-dl API.
     /// Returns a dictionary keyed by original URL.
@@ -34,6 +42,14 @@ public class TorahDlResolver(
 
         foreach (var url in urls)
         {
+            // Skip known-unsupported sites silently (no Warning, no alert noise)
+            if (UnsupportedSitePattern().IsMatch(url))
+            {
+                logger.LogDebug("Skipping unsupported site: {Url}", url);
+                results[url] = null;
+                continue;
+            }
+
             var normalized = NormalizeUrl(url);
 
             if (IsDirectAudioLink(normalized))
@@ -129,6 +145,12 @@ public class TorahDlResolver(
 
         return results;
     }
+
+    /// <summary>
+    /// Returns true if the URL belongs to a known-but-unsupported site (e.g. requires login).
+    /// Used by the pipeline to decide log level when resolution returns null.
+    /// </summary>
+    public static bool IsUnsupportedSite(string url) => UnsupportedSitePattern().IsMatch(url);
 
     /// <summary>
     /// Normalizes URLs to formats that torah-dl can handle.

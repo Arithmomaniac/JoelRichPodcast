@@ -47,7 +47,10 @@ public class PodcastPipeline(
             var result = resolutions.GetValueOrDefault(link.LinkUrl);
             if (result?.DownloadUrl is null)
             {
-                logger.LogWarning("Could not resolve: {Url} ({Title})", link.LinkUrl, link.LinkTitle);
+                if (TorahDlResolver.IsUnsupportedSite(link.LinkUrl))
+                    logger.LogDebug("Skipped unsupported site: {Url} ({Title})", link.LinkUrl, link.LinkTitle);
+                else
+                    logger.LogWarning("Could not resolve: {Url} ({Title})", link.LinkUrl, link.LinkTitle);
                 failed++;
                 continue;
             }
