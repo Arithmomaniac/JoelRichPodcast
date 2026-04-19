@@ -111,21 +111,21 @@ resource errorLogAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-previe
   }
 }
 
-// Alert: Torah-dl resolution failures — only fires for NEW URLs not seen in the previous 7 days.
-// Uses overrideQueryTimeRange to look back 8 days so the query can compare today's failures
-// against the previous week. Since Audio Roundup posts weekly, this effectively fires once
-// per new post (when new URLs fail) rather than repeating daily for the same failures.
+// Alert: Torah-dl resolution failures — only fires for NEW URLs not seen yesterday.
+// Uses overrideQueryTimeRange: P2D so the query can compare today's failures against
+// yesterday's. Since the pipeline runs daily and retries the same URLs, this effectively
+// fires only when a new Audio Roundup post introduces new failing URLs.
 resource resolutionFailureDigest 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview' = {
   name: '${functionAppName}-resolution-failures'
   location: location
   properties: {
     displayName: 'Joel Rich Podcast: Torah-dl resolution failures'
-    description: 'New Audio Roundup URLs could not be resolved to direct audio links. Only fires for URLs not seen in the previous 7 days.'
+    description: 'New Audio Roundup URLs could not be resolved to direct audio links. Only fires for URLs not seen in the previous day.'
     severity: 3
     enabled: true
     evaluationFrequency: 'P1D'
     windowSize: 'P1D'
-    overrideQueryTimeRange: 'P8D'
+    overrideQueryTimeRange: 'P2D'
     scopes: [appInsightsId]
     criteria: {
       allOf: [
