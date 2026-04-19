@@ -159,7 +159,7 @@ resource resolutionFailureDigest 'Microsoft.Insights/scheduledQueryRules@2023-03
         }
       ]
     }
-    autoMitigate: true
+    autoMitigate: false
     actions: {
       actionGroups: [actionGroup.id]
     }
