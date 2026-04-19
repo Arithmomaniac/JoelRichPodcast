@@ -111,28 +111,39 @@ resource errorLogAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-previe
   }
 }
 
-// Alert: Daily digest of torah-dl resolution failures.
-// Since Audio Roundup posts weekly (Tuesdays), this effectively produces
-// a weekly notification of which URLs could not be resolved.
+// Alert: Torah-dl resolution failures — only fires for NEW URLs not seen in the previous 7 days.
+// Uses overrideQueryTimeRange to look back 8 days so the query can compare today's failures
+// against the previous week. Since Audio Roundup posts weekly, this effectively fires once
+// per new post (when new URLs fail) rather than repeating daily for the same failures.
 resource resolutionFailureDigest 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview' = {
   name: '${functionAppName}-resolution-failures'
   location: location
   properties: {
     displayName: 'Joel Rich Podcast: Torah-dl resolution failures'
-    description: 'Some Audio Roundup URLs could not be resolved to direct audio links. These episodes will be missing from the podcast feed.'
+    description: 'New Audio Roundup URLs could not be resolved to direct audio links. Only fires for URLs not seen in the previous 7 days.'
     severity: 3
     enabled: true
     evaluationFrequency: 'P1D'
     windowSize: 'P1D'
+    overrideQueryTimeRange: 'P8D'
     scopes: [appInsightsId]
     criteria: {
       allOf: [
         {
           query: '''
+            let knownFailures = traces
+            | where timestamp < ago(1d)
+            | where message has "Could not resolve:"
+            | extend url = tostring(customDimensions["Url"])
+            | extend failedUrl = iff(isempty(url), extract(@"Could not resolve: (.+?)( \(|$)", 1, message), url)
+            | where isnotempty(failedUrl)
+            | distinct failedUrl;
             traces
+            | where timestamp >= ago(1d)
             | where message has "Could not resolve:"
             | extend url = tostring(customDimensions["Url"]), title = tostring(customDimensions["Title"])
             | project timestamp, failedUrl = iff(isempty(url), extract(@"Could not resolve: (.+?)( \(|$)", 1, message), url)
+            | join kind=leftanti knownFailures on failedUrl
             | summarize failureCount = count(), failedUrls = strcat_array(make_set(failedUrl, 20), ', ') by bin(timestamp, 1d)
           '''
           timeAggregation: 'Count'
@@ -148,7 +159,7 @@ resource resolutionFailureDigest 'Microsoft.Insights/scheduledQueryRules@2023-03
         }
       ]
     }
-    autoMitigate: false
+    autoMitigate: true
     actions: {
       actionGroups: [actionGroup.id]
     }
