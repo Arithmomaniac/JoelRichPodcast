@@ -1,4 +1,6 @@
+using System.Text;
 using System.Xml.Linq;
+using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 using JoelRichPodcast.Functions.Models;
 using Microsoft.Extensions.Logging;
@@ -73,33 +75,111 @@ public class TorahMusingsFeedParser(
                 RoundupIndex: results.Count));
         }
 
-        // Current format: <p><a href="URL">URL</a><br><strong>Title</strong><br>Description</p>
-        foreach (var p in document.QuerySelectorAll("p:has(a):has(strong)"))
+        // Paragraph format: <p><a href="URL">URL</a><br>Title<br>Description</p>.
+        // Some posts put multiple entries in one paragraph, separated by anchors.
+        // Some posts wrap the title in <strong>; newer posts leave it as plain text.
+        foreach (var p in document.QuerySelectorAll("p:has(a):has(br)").OfType<IElement>())
         {
-            var anchor = p.QuerySelector("a");
-            var strong = p.QuerySelector("strong");
-            if (anchor is null || strong is null) continue;
-
-            var linkUrl = anchor.GetAttribute("href")?.Trim();
-            var linkTitle = strong.TextContent.Trim();
-
-            if (string.IsNullOrWhiteSpace(linkUrl))
+            if (p.Closest("li") is not null)
                 continue;
 
-            var clone = (AngleSharp.Dom.IElement)p.Clone();
-            clone.QuerySelector("a")?.Remove();
-            clone.QuerySelector("strong")?.Remove();
-            var description = clone.TextContent.Trim();
-
-            results.Add(new AudioRoundupLink(
-                Description: description,
-                LinkTitle: linkTitle,
-                LinkUrl: linkUrl,
-                PublishDate: publishDate,
-                RoundupUrl: roundupUrl,
-                RoundupIndex: results.Count));
+            foreach (var (linkUrl, linkTitle, description) in ParseParagraphEntries(p))
+                results.Add(new AudioRoundupLink(
+                    Description: description,
+                    LinkTitle: linkTitle,
+                    LinkUrl: linkUrl,
+                    PublishDate: publishDate,
+                    RoundupUrl: roundupUrl,
+                    RoundupIndex: results.Count));
         }
 
         return results;
+    }
+
+    private static IEnumerable<(string LinkUrl, string LinkTitle, string Description)> ParseParagraphEntries(IElement paragraph)
+    {
+        string? linkUrl = null;
+        var lines = new List<string>();
+        var currentLine = new StringBuilder();
+
+        // In paragraph-based posts, each <a> starts a new entry and each <br> separates
+        // the URL, title, and description lines, even when many entries share one <p>.
+        foreach (var node in WalkEntryNodes(paragraph))
+        {
+            if (node is IElement { LocalName: "a" } anchor)
+            {
+                var entry = BuildEntry(linkUrl, lines, currentLine);
+                if (entry is not null)
+                    yield return entry.Value;
+
+                linkUrl = anchor.GetAttribute("href")?.Trim();
+                lines = [];
+                currentLine.Clear();
+                continue;
+            }
+
+            if (linkUrl is null)
+                continue;
+
+            if (node is IElement { LocalName: "br" })
+            {
+                AddCurrentLine(lines, currentLine);
+                continue;
+            }
+
+            if (node is IText text)
+                currentLine.Append(text.Data);
+        }
+
+        var finalEntry = BuildEntry(linkUrl, lines, currentLine);
+        if (finalEntry is not null)
+            yield return finalEntry.Value;
+    }
+
+    private static IEnumerable<INode> WalkEntryNodes(INode node)
+    {
+        foreach (var child in node.ChildNodes)
+        {
+            // Preserve source order while flattening formatting spans around text.
+            if (child is IElement { LocalName: "a" or "br" } or IText)
+            {
+                yield return child;
+                continue;
+            }
+
+            foreach (var descendant in WalkEntryNodes(child))
+                yield return descendant;
+        }
+    }
+
+    private static (string LinkUrl, string LinkTitle, string Description)? BuildEntry(
+        string? linkUrl,
+        List<string> lines,
+        StringBuilder currentLine)
+    {
+        if (string.IsNullOrWhiteSpace(linkUrl))
+            return null;
+
+        AddCurrentLine(lines, currentLine);
+        if (lines.Count == 0)
+            return null;
+
+        var linkTitle = lines[0];
+        var description = string.Join(" ", lines.Skip(1)).Trim();
+        return (linkUrl, linkTitle, description);
+    }
+
+    private static void AddCurrentLine(List<string> lines, StringBuilder currentLine)
+    {
+        var line = NormalizeWhitespace(currentLine.ToString());
+        if (!string.IsNullOrWhiteSpace(line))
+            lines.Add(line);
+
+        currentLine.Clear();
+    }
+
+    private static string NormalizeWhitespace(string value)
+    {
+        return string.Join(' ', value.Split([' ', '\t', '\r', '\n', '\f'], StringSplitOptions.RemoveEmptyEntries));
     }
 }
