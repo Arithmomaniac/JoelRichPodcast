@@ -93,6 +93,20 @@ public class TorahMusingsFeedParser(
                     RoundupIndex: results.Count));
         }
 
+        // Split-paragraph format:
+        // <p><a href="URL">URL</a></p><p>Title</p><p>Description</p>, or
+        // <p>URL</p><p>Title</p><p>Description</p> when the feed stops linking URLs.
+        // Each URL-only paragraph starts a new entry; following text-only
+        // paragraphs become the title and description until the next URL paragraph.
+        foreach (var (linkUrl, linkTitle, description) in ParseSplitParagraphEntries(document))
+            results.Add(new AudioRoundupLink(
+                Description: description,
+                LinkTitle: linkTitle,
+                LinkUrl: linkUrl,
+                PublishDate: publishDate,
+                RoundupUrl: roundupUrl,
+                RoundupIndex: results.Count));
+
         return results;
     }
 
@@ -152,6 +166,96 @@ public class TorahMusingsFeedParser(
         }
     }
 
+    private static IEnumerable<(string LinkUrl, string LinkTitle, string Description)> ParseSplitParagraphEntries(IDocument document)
+    {
+        string? linkUrl = null;
+        var lines = new List<string>();
+
+        foreach (var paragraph in document.QuerySelectorAll("p").OfType<IElement>())
+        {
+            if (paragraph.Closest("li") is not null)
+                continue;
+
+            var paragraphUrl = GetUrlOnlyParagraphUrl(paragraph);
+            if (paragraphUrl is not null)
+            {
+                var entry = BuildEntry(linkUrl, lines);
+                if (entry is not null)
+                    yield return entry.Value;
+
+                linkUrl = paragraphUrl;
+                lines = [];
+                continue;
+            }
+
+            if (linkUrl is null)
+                continue;
+
+            if (paragraph.QuerySelector("a") is not null)
+                continue;
+
+            if (paragraph.QuerySelector("br") is not null)
+                lines.AddRange(ReadParagraphTextLines(paragraph));
+            else
+            {
+                var line = NormalizeWhitespace(paragraph.TextContent);
+                if (!string.IsNullOrWhiteSpace(line))
+                    lines.Add(line);
+            }
+        }
+
+        var finalEntry = BuildEntry(linkUrl, lines);
+        if (finalEntry is not null)
+            yield return finalEntry.Value;
+    }
+
+    private static string? GetUrlOnlyParagraphUrl(IElement paragraph)
+    {
+        var anchors = paragraph.QuerySelectorAll("a").OfType<IElement>().ToList();
+        var paragraphText = NormalizeWhitespace(paragraph.TextContent);
+
+        if (anchors.Count == 0)
+            return IsHttpUrl(paragraphText) ? paragraphText : null;
+
+        if (anchors.Count != 1)
+            return null;
+
+        var anchor = anchors[0];
+        var linkUrl = anchor.GetAttribute("href")?.Trim();
+        if (string.IsNullOrWhiteSpace(linkUrl))
+            return null;
+
+        var anchorText = NormalizeWhitespace(anchor.TextContent);
+        if (!IsHttpUrl(anchorText) || !string.Equals(paragraphText, anchorText, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return linkUrl;
+    }
+
+    private static IEnumerable<string> ReadParagraphTextLines(IElement paragraph)
+    {
+        var currentLine = new StringBuilder();
+        foreach (var node in WalkEntryNodes(paragraph))
+        {
+            if (node is IElement { LocalName: "br" })
+            {
+                var line = NormalizeWhitespace(currentLine.ToString());
+                if (!string.IsNullOrWhiteSpace(line))
+                    yield return line;
+
+                currentLine.Clear();
+                continue;
+            }
+
+            if (node is IText text)
+                currentLine.Append(text.Data);
+        }
+
+        var finalLine = NormalizeWhitespace(currentLine.ToString());
+        if (!string.IsNullOrWhiteSpace(finalLine))
+            yield return finalLine;
+    }
+
     private static (string LinkUrl, string LinkTitle, string Description)? BuildEntry(
         string? linkUrl,
         List<string> lines,
@@ -162,6 +266,18 @@ public class TorahMusingsFeedParser(
 
         AddCurrentLine(lines, currentLine);
         if (lines.Count == 0)
+            return null;
+
+        var linkTitle = lines[0];
+        var description = string.Join(" ", lines.Skip(1)).Trim();
+        return (linkUrl, linkTitle, description);
+    }
+
+    private static (string LinkUrl, string LinkTitle, string Description)? BuildEntry(
+        string? linkUrl,
+        List<string> lines)
+    {
+        if (string.IsNullOrWhiteSpace(linkUrl) || lines.Count == 0)
             return null;
 
         var linkTitle = lines[0];
@@ -181,5 +297,11 @@ public class TorahMusingsFeedParser(
     private static string NormalizeWhitespace(string value)
     {
         return string.Join(' ', value.Split([' ', '\t', '\r', '\n', '\f'], StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static bool IsHttpUrl(string value)
+    {
+        return value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
     }
 }
