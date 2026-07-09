@@ -1,6 +1,9 @@
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
 import azure.functions as func
+from resolver import resolve_url
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
@@ -33,24 +36,13 @@ def resolve(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json",
         )
 
-    from torah_dl import extract
-    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-
     PER_URL_TIMEOUT_SECONDS = 30
 
     def resolve_one(url: str) -> dict:
-        try:
-            result = extract(url)
-            return {
-                "url": url,
-                "download_url": result.download_url,
-                "title": result.title,
-                "file_format": result.file_format,
-                "file_name": result.file_name,
-            }
-        except Exception as e:
-            logging.warning("torah-dl failed for %s: %s", url, e)
-            return {"url": url, "error": str(e)}
+        result = resolve_url(url)
+        if result.get("download_url") is None:
+            logging.warning("URL resolution failed for %s: %s", url, result.get("error"))
+        return result
 
     results = []
     # Process each URL with a per-URL timeout so one hang can't block the batch

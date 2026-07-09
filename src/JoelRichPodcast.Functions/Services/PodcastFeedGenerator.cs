@@ -10,7 +10,7 @@ public class PodcastFeedGenerator
     private static readonly XNamespace Atom = "http://www.w3.org/2005/Atom";
 
     private const string FeedTitle = "Joel Rich Audio Roundup Podcast";
-    private const string FeedDescription = "Joel Rich's Audio Roundup picks from Torah Musings — curated Torah audio from across the web, served as a podcast feed.";
+    private const string FeedDescription = "Joel Rich's Audio Roundup picks from Torah Musings — curated Torah audio and video from across the web, served as a podcast feed.";
     private const string FeedLink = "https://www.torahmusings.com/category/audio/";
     private const string FeedLanguage = "en";
     private const string FeedAuthor = "Joel Rich / Avi Levin";

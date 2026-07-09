@@ -43,7 +43,7 @@ public partial class TorahDlResolver(
         foreach (var url in urls)
         {
             // Skip known-unsupported sites silently (no Warning, no alert noise)
-            if (UnsupportedSitePattern().IsMatch(url))
+            if (IsUnsupportedSite(url))
             {
                 logger.LogDebug("Skipping unsupported site: {Url}", url);
                 results[url] = null;
@@ -52,7 +52,7 @@ public partial class TorahDlResolver(
 
             var normalized = NormalizeUrl(url);
 
-            if (IsDirectAudioLink(normalized))
+            if (IsDirectMediaLink(normalized))
             {
                 var ext = Path.GetExtension(new Uri(normalized).AbsolutePath).TrimStart('.');
                 var contentType = ext switch
@@ -61,6 +61,8 @@ public partial class TorahDlResolver(
                     "m4a" => "audio/mp4",
                     "wav" => "audio/wav",
                     "ogg" => "audio/ogg",
+                    "mp4" => "video/mp4",
+                    "webm" => "video/webm",
                     _ => "audio/mpeg"
                 };
                 results[url] = new TorahDlResult(
@@ -150,7 +152,8 @@ public partial class TorahDlResolver(
     /// Returns true if the URL belongs to a known-but-unsupported site (e.g. requires login).
     /// Used by the pipeline to decide log level when resolution returns null.
     /// </summary>
-    public static bool IsUnsupportedSite(string url) => UnsupportedSitePattern().IsMatch(url);
+    public static bool IsUnsupportedSite(string url) =>
+        UnsupportedSitePattern().IsMatch(url) || IsApplePodcastShowUrl(url);
 
     /// <summary>
     /// Normalizes URLs to formats that torah-dl can handle.
@@ -159,18 +162,35 @@ public partial class TorahDlResolver(
     internal static string NormalizeUrl(string url) =>
         YutorahLectureCfmPattern.Replace(url, "$1/lectures/$2");
 
-    private static bool IsDirectAudioLink(string url)
+    private static bool IsDirectMediaLink(string url)
     {
         try
         {
             var path = new Uri(url).AbsolutePath.ToLowerInvariant();
             return path.EndsWith(".mp3") || path.EndsWith(".m4a")
-                || path.EndsWith(".wav") || path.EndsWith(".ogg");
+                || path.EndsWith(".wav") || path.EndsWith(".ogg")
+                || path.EndsWith(".mp4") || path.EndsWith(".webm");
         }
         catch
         {
             return false;
         }
+    }
+
+    private static bool IsApplePodcastShowUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return false;
+
+        if (!string.Equals(uri.Host, "podcasts.apple.com", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!uri.AbsolutePath.Contains("/id", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var query = uri.Query.TrimStart('?');
+        return !query.Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Any(part => part.StartsWith("i=", StringComparison.OrdinalIgnoreCase));
     }
 
     private record ApiResolveResult(

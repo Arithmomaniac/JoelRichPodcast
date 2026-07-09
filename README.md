@@ -7,11 +7,11 @@ Converts Joel Rich's [Audio Roundup](https://www.torahmusings.com/category/audio
 ## Architecture
 
 ```
-Torah Musings RSS → Parse Audio Roundup → Resolve URIs (torah-dl) → Table Storage → RSS feed → Blob static website
+Torah Musings RSS → Parse Audio Roundup → Resolve URIs (torah-dl + fallback resolvers) → Table Storage → RSS feed → Blob static website
 ```
 
 - **.NET 10 Azure Functions** (isolated worker) — timer trigger (every 6 hours) + HTTP trigger (manual)
-- **[torah-dl](https://github.com/SoferAi/torah-dl)** — resolves audio URLs from 15+ Torah sites (YUTorah, TorahAnytime, etc.)
+- **[torah-dl](https://github.com/SoferAi/torah-dl)** + fallback resolvers — resolves media URLs from Torah sites, Apple Podcasts, embedded audio pages, YouTube, and video-only YUTorah pages
 - **Azure Table Storage** — durable episode store (source of truth)
 - **Azure Blob Storage** static website — hosts `feed.xml`
 - **Managed identity** — no connection strings in Azure
@@ -28,7 +28,7 @@ This project's architecture is modeled on [hadashon-podcast](https://github.com/
 - [Azure Functions Core Tools v4](https://learn.microsoft.com/azure/azure-functions/functions-run-local)
 - [Azurite](https://learn.microsoft.com/azure/storage/common/storage-use-azurite) (local Storage emulator)
 - [Python 3.10+](https://www.python.org/downloads/)
-- `pip install torah-dl` (for local URI resolution)
+- `pip install -r src/TorahDlApi/requirements.txt` (for local URI resolution)
 
 ## Local Development
 
@@ -37,7 +37,7 @@ This project's architecture is modeled on [hadashon-podcast](https://github.com/
 azurite --skipApiVersionCheck
 
 # Install Python dependencies
-pip install torah-dl
+pip install -r src/TorahDlApi/requirements.txt
 
 # Run the function app
 cd src/JoelRichPodcast.Functions
@@ -80,7 +80,7 @@ Pushes to `master` trigger the `Deploy to Azure` workflow, which:
 
 1. **Parse RSS** — Fetches the latest Audio Roundup post from the Torah Musings RSS feed
 2. **Extract links** — Parses the HTML content with AngleSharp to find all `<li><a>` shiur links
-3. **Resolve URLs** — Uses [torah-dl](https://github.com/SoferAi/torah-dl) (via Python subprocess) to resolve page URLs to direct audio download URLs
+3. **Resolve URLs** — Uses [torah-dl](https://github.com/SoferAi/torah-dl) first, then Python fallback resolvers to resolve page URLs to direct audio/video download URLs
 4. **Enrich metadata** — HTTP HEAD on each audio URL to get content type, length, and last-modified date
 5. **Store episodes** — Upserts to Azure Table Storage (deduplication by date + title slug)
 6. **Generate feed** — Builds RSS 2.0 + iTunes XML from all stored episodes
