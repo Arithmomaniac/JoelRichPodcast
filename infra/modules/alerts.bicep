@@ -130,27 +130,48 @@ resource resolutionFailureDigest 'Microsoft.Insights/scheduledQueryRules@2023-03
     criteria: {
       allOf: [
         {
-          query: '''
-            let knownFailures = traces
-            | where timestamp < ago(1d)
+          query: replace('''
+            let resolutionFailures = traces
+            | where cloud_RoleName =~ "__FUNCTION_APP_NAME__"
             | where message has "Could not resolve:"
             | extend url = tostring(customDimensions["Url"])
             | extend failedUrl = iff(isempty(url), extract(@"Could not resolve: (.+?)( \(|$)", 1, message), url)
             | where isnotempty(failedUrl)
+            | extend reasonCode = tostring(customDimensions["ReasonCode"])
+            | extend error = tostring(customDimensions["Error"])
+            | extend reasonCode = case(
+                isnotempty(reasonCode), reasonCode,
+                error has_any ("403", "Forbidden", "not a bot", "Cloudflare"), "access_blocked",
+                error has_any ("timeout", "timed out"), "timeout",
+                error has "Unsupported URL", "no_media_found",
+                "unclassified")
+            | where reasonCode != "confirmed_non_audio"
+            | extend reasonPriority = case(
+                reasonCode == "access_blocked", 5,
+                reasonCode == "timeout", 4,
+                reasonCode == "resolver_error", 3,
+                reasonCode == "no_media_found", 2,
+                1)
+            | project timestamp, failedUrl, reasonCode, reasonPriority;
+            let knownFailures = resolutionFailures
+            | where timestamp < ago(1d)
             | distinct failedUrl;
-            traces
+            resolutionFailures
             | where timestamp >= ago(1d)
-            | where message has "Could not resolve:"
-            | extend url = tostring(customDimensions["Url"]), title = tostring(customDimensions["Title"])
-            | project timestamp, failedUrl = iff(isempty(url), extract(@"Could not resolve: (.+?)( \(|$)", 1, message), url)
+            | summarize arg_max(reasonPriority, reasonCode) by failedUrl
             | join kind=leftanti knownFailures on failedUrl
-            | summarize failureCount = count(), failedUrls = strcat_array(make_set(failedUrl, 20), ', ') by bin(timestamp, 1d)
-          '''
-          timeAggregation: 'Count'
+            | summarize
+                newFailureCount = count(),
+                failedUrls = strcat_array(make_set(failedUrl, 20), ', '),
+                failureReasons = strcat_array(make_set(reasonCode, 10), ', ')
+          ''', '__FUNCTION_APP_NAME__', functionAppName)
+          metricMeasureColumn: 'newFailureCount'
+          timeAggregation: 'Total'
           operator: 'GreaterThan'
           threshold: 0
           dimensions: [
             { name: 'failedUrls', operator: 'Include', values: ['*'] }
+            { name: 'failureReasons', operator: 'Include', values: ['*'] }
           ]
           failingPeriods: {
             numberOfEvaluationPeriods: 1

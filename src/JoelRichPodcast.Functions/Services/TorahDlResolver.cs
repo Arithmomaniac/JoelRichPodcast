@@ -123,13 +123,19 @@ public partial class TorahDlResolver(
                 }
                 else if (apiResult.Error is not null)
                 {
-                    logger.LogWarning("Could not resolve: {Url} — {Error}", original, apiResult.Error);
-                    results[original] = null;
+                    logger.LogDebug("Resolver failed for {Url}: {ReasonCode} — {Error}",
+                        original, apiResult.ReasonCode, apiResult.Error);
+                    results[original] = new TorahDlResult(
+                        null, apiResult.Title, apiResult.FileFormat, apiResult.FileName,
+                        apiResult.ReasonCode, apiResult.Error);
                 }
                 else if (apiResult.DownloadUrl is null)
                 {
-                    logger.LogWarning("torah-dl returned no download URL for {Url}", original);
-                    results[original] = null;
+                    const string error = "torah-dl returned no download URL";
+                    logger.LogDebug("{Error} for {Url}", error, original);
+                    results[original] = new TorahDlResult(
+                        null, apiResult.Title, apiResult.FileFormat, apiResult.FileName,
+                        apiResult.ReasonCode ?? ResolutionReasonCodes.NoMediaFound, error);
                 }
                 else
                 {
@@ -199,5 +205,6 @@ public partial class TorahDlResolver(
         string? Title,
         string? FileFormat,
         string? FileName,
+        string? ReasonCode,
         string? Error);
 }

@@ -37,6 +37,7 @@ public class PodcastPipeline(
         // 2. Resolve all links to direct audio URLs via torah-dl (batch)
         var resolved = 0;
         var failed = 0;
+        var skipped = 0;
         var httpClient = httpClientFactory.CreateClient("AudioMetadata");
 
         var linkUrls = links.Select(l => l.LinkUrl).ToList();
@@ -48,9 +49,27 @@ public class PodcastPipeline(
             if (result?.DownloadUrl is null)
             {
                 if (TorahDlResolver.IsUnsupportedSite(link.LinkUrl))
+                {
                     logger.LogDebug("Skipped unsupported site: {Url} ({Title})", link.LinkUrl, link.LinkTitle);
+                    skipped++;
+                    continue;
+                }
+                else if (string.Equals(result?.ReasonCode, ResolutionReasonCodes.ConfirmedNonAudio,
+                    StringComparison.Ordinal))
+                {
+                    logger.LogInformation("Skipped confirmed non-audio source: {Url} ({Title})",
+                        link.LinkUrl, link.LinkTitle);
+                    skipped++;
+                    continue;
+                }
                 else
-                    logger.LogWarning("Could not resolve: {Url} ({Title})", link.LinkUrl, link.LinkTitle);
+                    logger.LogWarning(
+                        "Could not resolve: {Url} ({Title}) [{ReasonCode}] {Error} Roundup: {RoundupUrl}",
+                        link.LinkUrl,
+                        link.LinkTitle,
+                        result?.ReasonCode ?? ResolutionReasonCodes.Unclassified,
+                        result?.Error ?? "No resolver result was returned",
+                        link.RoundupUrl);
                 failed++;
                 continue;
             }
@@ -86,7 +105,9 @@ public class PodcastPipeline(
                 logger.LogError(ex, "Table Storage upsert failed for {Title} ({Url})", episode.Title, episode.AudioUrl);
             }
         }
-        logger.LogInformation("Resolved and upserted {Resolved}/{Total} episodes ({Failed} failed to resolve)", resolved, links.Count, failed);
+        logger.LogInformation(
+            "Resolved and upserted {Resolved}/{Total} episodes ({Failed} failed, {Skipped} skipped)",
+            resolved, links.Count, failed, skipped);
 
         if (resolved == 0 && links.Count > 0)
         {
