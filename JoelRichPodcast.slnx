@@ -1,5 +1,9 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/JoelRichPodcast.Backfill/JoelRichPodcast.Backfill.csproj" />
     <Project Path="src/JoelRichPodcast.Functions/JoelRichPodcast.Functions.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/JoelRichPodcast.Functions.Tests/JoelRichPodcast.Functions.Tests.csproj" />
   </Folder>
 </Solution>

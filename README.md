@@ -55,6 +55,18 @@ curl -X POST http://localhost:7071/admin/functions/ScrapeAndPublish \
   -H "Content-Type: application/json" -d "{}"
 ```
 
+### Resolver validation and recovery
+
+Run deterministic tests before the live publisher check:
+
+```bash
+python -m unittest discover -s tests/TorahDlApi -p 'test_*.py'
+dotnet test JoelRichPodcast.slnx
+python scripts/validate_torahdl_resolver.py
+```
+
+Resolution outcome codes, reviewed exceptions, the YouTube disposition, and the dry-run historical backfill procedure are documented in [`docs/resolution-failures.md`](docs/resolution-failures.md).
+
 ## Deployment
 
 ### One-time setup

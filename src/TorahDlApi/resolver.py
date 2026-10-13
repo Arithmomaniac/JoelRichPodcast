@@ -25,6 +25,36 @@ YUTORAH_LECTURE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 TITLE_PATTERN = re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+SPREAKER_PLAYER_PATTERN = re.compile(
+    r"""<iframe\b[^>]*\bsrc=["'](?P<src>https://widget\.spreaker\.com/player\?[^"']+)["']""",
+    re.IGNORECASE,
+)
+YOUTUBE_EMBED_PATTERN = re.compile(
+    r"""<iframe\b[^>]*\bsrc=["'](?://|https?://)(?:www\.)?youtube\.com/embed/(?P<id>[\w-]+)""",
+    re.IGNORECASE,
+)
+
+REASON_ACCESS_BLOCKED = "access_blocked"
+REASON_CONFIRMED_NON_AUDIO = "confirmed_non_audio"
+REASON_NO_MEDIA_FOUND = "no_media_found"
+REASON_RESOLVER_ERROR = "resolver_error"
+REASON_TIMEOUT = "timeout"
+REASON_UNCLASSIFIED = "unclassified"
+
+CONFIRMED_NON_AUDIO_URLS = {
+    "https://traditiononline.org/reconceiving-conceptualism/",
+}
+
+REVIEWED_MEDIA_MAPPINGS = {
+    "https://minchasasher.com/he/shiur/%d7%a4%d7%a8%d7%a9%d7%94-%d7%a9%d7%99%d7%a2%d7%95%d7%a8%d7%99%d7%9d/%d7%95%d7%a0%d7%a9%d7%9e%d7%a8%d7%aa%d7%9d-%d7%9e%d7%90%d7%95%d7%93-%d7%9c%d7%a0%d7%a4%d7%a9%d7%95%d7%aa%d7%99%d7%9b%d7%9d/":
+        "https://m.torahbase.org/mp3/Vaeschanan_he_81.mp3",
+    "https://minchasasher.com/he/shiur/%d7%a4%d7%a8%d7%a9%d7%94-%d7%a9%d7%99%d7%a2%d7%95%d7%a8%d7%99%d7%9d/%d7%91%d7%a2%d7%a0%d7%99%d7%9f-%d7%aa%d7%95%d7%9c%d7%a2%d7%99%d7%9d-%d7%96%d7%a2%d7%99%d7%a8%d7%99%d7%9d/":
+        "https://m.torahbase.org/mp3/Reeh_he_80.mp3",
+    "https://minchasasher.com/he/shiur/%d7%a4%d7%a8%d7%a9%d7%94-%d7%a9%d7%99%d7%a2%d7%95%d7%a8%d7%99%d7%9d/%d7%92%d7%93%d7%a8%d7%99-%d7%94%d7%a6%d7%95%d7%9e%d7%95%d7%aa-%d7%91%d7%99%d7%a9%d7%a8%d7%90%d7%9c/":
+        "https://m.torahbase.org/mp3/Devarim_he_84.mp3",
+    "https://minchasasher.com/he/shiur/%d7%a4%d7%a8%d7%a9%d7%94-%d7%a9%d7%99%d7%a2%d7%95%d7%a8%d7%99%d7%9d/%d7%a9%d7%95%d7%97%d7%93-%d7%95%d7%97%d7%99%d7%95%d7%91-%d7%94%d7%a9%d7%91%d7%aa%d7%95/":
+        "https://m.torahbase.org/mp3/Shoftim_he_85.mp3",
+}
 
 CONTENT_TYPES_BY_EXTENSION = {
     ".mp3": "audio/mpeg",
@@ -36,14 +66,42 @@ CONTENT_TYPES_BY_EXTENSION = {
 }
 
 
+class ResolutionFailure(RuntimeError):
+    def __init__(self, reason_code: str, message: str):
+        super().__init__(message)
+        self.reason_code = reason_code
+
+
 def resolve_url(url: str) -> dict:
     """Resolve a page URL to direct podcast media using torah-dl first."""
+    if url in CONFIRMED_NON_AUDIO_URLS:
+        return {
+            "url": url,
+            "error": "reviewed source is an article/PDF without podcast media",
+            "reason_code": REASON_CONFIRMED_NON_AUDIO,
+        }
+
+    if media_url := REVIEWED_MEDIA_MAPPINGS.get(url):
+        return {"url": url, "resolver": "reviewed-mapping", **build_result(media_url)}
+
+    if is_youtube_url(url):
+        return {
+            "url": url,
+            "error": "YouTube does not expose a durable unauthenticated podcast enclosure",
+            "reason_code": REASON_ACCESS_BLOCKED,
+        }
+
     if is_apple_podcast_show_url(url):
-        return {"url": url, "error": "unsupported Apple Podcasts show page"}
+        return {
+            "url": url,
+            "error": "unsupported Apple Podcasts show page",
+            "reason_code": REASON_NO_MEDIA_FOUND,
+        }
 
     errors: list[str] = []
+    reason_codes: list[str] = []
     resolvers = [("torah-dl", resolve_with_torah_dl)]
-    if is_apple_podcast_url(url) or is_youtube_url(url):
+    if is_apple_podcast_url(url):
         resolvers.append(("yt-dlp", resolve_with_yt_dlp))
     resolvers.extend((
         ("embedded-media", resolve_with_embedded_media),
@@ -55,15 +113,24 @@ def resolve_url(url: str) -> dict:
     for name, resolver in resolvers:
         try:
             result = resolver(url)
+        except ResolutionFailure as e:
+            errors.append(f"{name}: {e}")
+            reason_codes.append(e.reason_code)
+            continue
         except Exception as e:  # Resolver boundary: keep trying the fallback chain.
             errors.append(f"{name}: {e}")
+            reason_codes.append(classify_error(e))
             LOGGER.debug("%s resolver failed for %s", name, url, exc_info=e)
             continue
 
         if result is not None and result.get("download_url"):
             return {"url": url, "resolver": name, **result}
 
-    return {"url": url, "error": "; ".join(errors) or "no resolver returned a download URL"}
+    return {
+        "url": url,
+        "error": "; ".join(errors) or "no resolver returned a download URL",
+        "reason_code": choose_reason_code(reason_codes),
+    }
 
 
 def resolve_with_torah_dl(url: str) -> dict | None:
@@ -91,11 +158,11 @@ def resolve_with_embedded_media(url: str) -> dict | None:
         return None
 
     media_urls = sorted({iri_to_uri(html.unescape(match.group(0))) for match in MEDIA_URL_PATTERN.finditer(response.text)})
-    if not media_urls:
-        return None
+    if media_urls:
+        media_url = choose_media_url(media_urls)
+        return build_result(media_url, extract_title(response.text))
 
-    media_url = choose_media_url(media_urls)
-    return build_result(media_url, extract_title(response.text))
+    return resolve_spreaker_embed(response.text)
 
 
 def resolve_yutorah_mp4(url: str) -> dict | None:
@@ -109,11 +176,45 @@ def resolve_yutorah_mp4(url: str) -> dict | None:
 
     media_urls = sorted({iri_to_uri(html.unescape(match.group(0))) for match in MEDIA_URL_PATTERN.finditer(response.text)})
     mp4_urls = [media_url for media_url in media_urls if media_url.lower().split("?", 1)[0].endswith(".mp4")]
-    if not mp4_urls:
+    if mp4_urls:
+        media_url = next((url for url in mp4_urls if not re.search(r"/\d+\.mp4$", urlsplit(url).path)), mp4_urls[0])
+        return build_result(media_url, extract_yutorah_title(response.text))
+
+    if match := YOUTUBE_EMBED_PATTERN.search(response.text):
+        raise ResolutionFailure(
+            REASON_ACCESS_BLOCKED,
+            f"YUTorah lecture embeds YouTube video {match.group('id')} without a durable podcast enclosure",
+        )
+
+    return None
+
+
+def resolve_spreaker_embed(text: str) -> dict | None:
+    if not (match := SPREAKER_PLAYER_PATTERN.search(text)):
         return None
 
-    media_url = next((url for url in mp4_urls if not re.search(r"/\d+\.mp4$", urlsplit(url).path)), mp4_urls[0])
-    return build_result(media_url, extract_yutorah_title(response.text))
+    player_url = html.unescape(match.group("src"))
+    episode_ids = [
+        part.removeprefix("episode_id=")
+        for part in urlsplit(player_url).query.split("&")
+        if part.startswith("episode_id=")
+    ]
+    if len(episode_ids) != 1 or not episode_ids[0].isdigit():
+        raise ResolutionFailure(REASON_RESOLVER_ERROR, "Spreaker player has no valid episode identifier")
+
+    episode_id = episode_ids[0]
+    response = requests.get(
+        f"https://api.spreaker.com/v2/episodes/{episode_id}",
+        timeout=REQUEST_TIMEOUT_SECONDS,
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+    response.raise_for_status()
+    episode = response.json().get("response", {}).get("episode", {})
+    media_url = episode.get("download_url") or episode.get("playback_url")
+    if not media_url:
+        raise ResolutionFailure(REASON_NO_MEDIA_FOUND, "Spreaker episode has no public media URL")
+
+    return build_result(media_url, episode.get("title"))
 
 
 def resolve_with_yt_dlp(url: str) -> dict | None:
@@ -148,11 +249,34 @@ def resolve_with_yt_dlp(url: str) -> dict | None:
 
 
 def choose_media_url(media_urls: list[str]) -> str:
+    audio_urls = [
+        url for url in media_urls
+        if urlsplit(url).path.lower().endswith((".mp3", ".m4a", ".wav", ".ogg"))
+    ]
+    candidates = audio_urls or media_urls
     return (
-        next((url for url in media_urls if "/mf/download/" in url), None)
-        or next((url for url in media_urls if "?_=" not in url), None)
-        or media_urls[0]
+        next((url for url in candidates if "/mf/download/" in url), None)
+        or next((url for url in candidates if "?_=" not in url), None)
+        or candidates[0]
     )
+
+
+def classify_error(error: Exception) -> str:
+    message = str(error).lower()
+    if "timed out" in message or "timeout" in message:
+        return REASON_TIMEOUT
+    if any(signal in message for signal in ("403", "forbidden", "not a bot", "sign in to confirm", "cloudflare")):
+        return REASON_ACCESS_BLOCKED
+    if "unsupported url" in message:
+        return REASON_NO_MEDIA_FOUND
+    return REASON_RESOLVER_ERROR
+
+
+def choose_reason_code(reason_codes: list[str]) -> str:
+    for reason_code in (REASON_ACCESS_BLOCKED, REASON_TIMEOUT, REASON_RESOLVER_ERROR, REASON_NO_MEDIA_FOUND):
+        if reason_code in reason_codes:
+            return reason_code
+    return REASON_NO_MEDIA_FOUND
 
 
 def build_result(media_url: str, title: str | None = None) -> dict:

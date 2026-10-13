@@ -1,0 +1,74 @@
+{
+  "episodes": [
+    {
+      "source_url": "https://18forty.org/podcast/finance-debate/",
+      "audio_url": "https://api.spreaker.com/v2/episodes/72546049/download.mp3",
+      "title": "Finance Debate: Larry Rothwachs and Leslie Ginsparg Klein",
+      "description": "Finance Debate: Larry Rothwachs and Leslie Ginsparg Klein — Way too much to say so I’ll just make a few quick general observations: when there’s no objective data available anyone can substitute their anecdote for data; education is the long-term answer for everything; listen 54 minutes in concerning the role of frum magazines.",
+      "publish_date": "2026-08-19T00:00:00-04:00",
+      "roundup_url": "https://www.torahmusings.com/2026/08/audio-roundup-202631/",
+      "roundup_index": 0,
+      "row_key": "2026-08-19_finance-debate-larry-rothwachs-and-leslie-ginsparg-klein",
+      "audio_content_type": "audio/mpeg",
+      "audio_content_length": null,
+      "provenance": "Torah Musings Audio Roundup 2026:31 and Spreaker episode 72546049.",
+      "reviewed": false
+    },
+    {
+      "source_url": "https://minchasasher.com/he/shiur/%d7%a4%d7%a8%d7%a9%d7%94-%d7%a9%d7%99%d7%a2%d7%95%d7%a8%d7%99%d7%9d/%d7%92%d7%93%d7%a8%d7%99-%d7%94%d7%a6%d7%95%d7%9e%d7%95%d7%aa-%d7%91%d7%99%d7%a9%d7%a8%d7%90%d7%9c/",
+      "audio_url": "https://m.torahbase.org/mp3/Devarim_he_84.mp3",
+      "title": "Rav Asher Weiss – גדרי הצומות בישראל",
+      "description": "Rav Asher Weiss – גדרי הצומות בישראל — Our fasts fall into four categories: tshuva, ritzui, aveilus, and zecher.",
+      "publish_date": "2026-08-26T00:00:00-04:00",
+      "roundup_url": "https://www.torahmusings.com/2026/08/audio-roundup-202632/",
+      "roundup_index": 17,
+      "row_key": "2026-08-26_rav-asher-weiss",
+      "audio_content_type": "audio/mpeg",
+      "audio_content_length": 55641504,
+      "provenance": "Torah Musings Audio Roundup 2026:32 and publisher MP3 on m.torahbase.org.",
+      "reviewed": false
+    },
+    {
+      "source_url": "https://minchasasher.com/he/shiur/%d7%a4%d7%a8%d7%a9%d7%94-%d7%a9%d7%99%d7%a2%d7%95%d7%a8%d7%99%d7%9d/%d7%95%d7%a0%d7%a9%d7%9e%d7%a8%d7%aa%d7%9d-%d7%9e%d7%90%d7%95%d7%93-%d7%9c%d7%a0%d7%a4%d7%a9%d7%95%d7%aa%d7%99%d7%9b%d7%9d/",
+      "audio_url": "https://m.torahbase.org/mp3/Vaeschanan_he_81.mp3",
+      "title": "Rav Asher Weiss – ונשמרתם מאוד לנפשותיכם",
+      "description": "Rav Asher Weiss – ונשמרתם מאוד לנפשותיכם",
+      "publish_date": "2026-09-02T00:00:00-04:00",
+      "roundup_url": "https://www.torahmusings.com/2026/09/audio-roundup-202633/",
+      "roundup_index": 0,
+      "row_key": "2026-09-02_rav-asher-weiss",
+      "audio_content_type": "audio/mpeg",
+      "audio_content_length": 10218647,
+      "provenance": "Application Insights source URL, Audio Roundup 2026:33 publication date, and publisher MP3 on m.torahbase.org; title/description require review.",
+      "reviewed": false
+    },
+    {
+      "source_url": "https://minchasasher.com/he/shiur/%d7%a4%d7%a8%d7%a9%d7%94-%d7%a9%d7%99%d7%a2%d7%95%d7%a8%d7%99%d7%9d/%d7%91%d7%a2%d7%a0%d7%99%d7%9f-%d7%aa%d7%95%d7%9c%d7%a2%d7%99%d7%9d-%d7%96%d7%a2%d7%99%d7%a8%d7%99%d7%9d/",
+      "audio_url": "https://m.torahbase.org/mp3/Reeh_he_80.mp3",
+      "title": "Rav Asher Weiss – בענין תולעים זעירים",
+      "description": "Rav Asher Weiss – בענין תולעים זעירים",
+      "publish_date": "2026-09-09T00:00:00-04:00",
+      "roundup_url": "https://www.torahmusings.com/2026/09/audio-roundup-202634/",
+      "roundup_index": 0,
+      "row_key": "2026-09-09_rav-asher-weiss",
+      "audio_content_type": "audio/mpeg",
+      "audio_content_length": 15457645,
+      "provenance": "Application Insights source URL, Audio Roundup 2026:34 publication date, and publisher MP3 on m.torahbase.org; title/description require review.",
+      "reviewed": false
+    },
+    {
+      "source_url": "https://minchasasher.com/he/shiur/%d7%a4%d7%a8%d7%a9%d7%94-%d7%a9%d7%99%d7%a2%d7%95%d7%a8%d7%99%d7%9d/%d7%a9%d7%95%d7%97%d7%93-%d7%95%d7%97%d7%99%d7%95%d7%91-%d7%94%d7%a9%d7%91%d7%aa%d7%95/",
+      "audio_url": "https://m.torahbase.org/mp3/Shoftim_he_85.mp3",
+      "title": "Rav Asher Weiss – שוחד וחיוב השבתו",
+      "description": "Rav Asher Weiss – שוחד וחיוב השבתו — The Rambam paskins that shochad must be returned if the giver demands return. Why? Quite a few explanations posited.",
+      "publish_date": "2026-09-16T00:00:00-04:00",
+      "roundup_url": "https://www.torahmusings.com/2026/09/audio-roundup-202635/",
+      "roundup_index": 10,
+      "row_key": "2026-09-16_rav-asher-weiss",
+      "audio_content_type": "audio/mpeg",
+      "audio_content_length": 13131046,
+      "provenance": "Torah Musings Audio Roundup 2026:35 and publisher MP3 on m.torahbase.org.",
+      "reviewed": false
+    }
+  ]
+}
