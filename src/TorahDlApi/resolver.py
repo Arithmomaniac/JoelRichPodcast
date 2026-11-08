@@ -3,6 +3,8 @@ from __future__ import annotations
 import html
 import logging
 import re
+from collections.abc import Callable
+from html.parser import HTMLParser
 from pathlib import PurePosixPath
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
@@ -72,8 +74,28 @@ class ResolutionFailure(RuntimeError):
         self.reason_code = reason_code
 
 
-def resolve_url(url: str) -> dict:
-    """Resolve a page URL to direct podcast media using torah-dl first."""
+class MediaLinkParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.urls: set[str] = set()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        for attribute, value in attrs:
+            if attribute not in {"href", "src"} or not value:
+                continue
+            parts = urlsplit(value)
+            if parts.scheme in {"http", "https"} and PurePosixPath(parts.path).suffix.lower() in CONTENT_TYPES_BY_EXTENSION:
+                self.urls.add(value)
+
+
+def extract_media_urls(text: str) -> list[str]:
+    parser = MediaLinkParser()
+    parser.feed(text)
+    urls = parser.urls | set(MEDIA_URL_PATTERN.findall(text))
+    return sorted({iri_to_uri(html.unescape(url)) for url in urls})
+
+
+def resolve_without_network(url: str) -> dict | None:
     if url in CONFIRMED_NON_AUDIO_URLS:
         return {
             "url": url,
@@ -98,6 +120,14 @@ def resolve_url(url: str) -> dict:
             "reason_code": REASON_NO_MEDIA_FOUND,
         }
 
+    return None
+
+
+def resolve_url(url: str, report_progress: Callable[[dict], None] | None = None) -> dict:
+    """Resolve a page URL to direct podcast media using torah-dl first."""
+    if result := resolve_without_network(url):
+        return result
+
     errors: list[str] = []
     reason_codes: list[str] = []
     resolvers = [("torah-dl", resolve_with_torah_dl)]
@@ -105,21 +135,27 @@ def resolve_url(url: str) -> dict:
         resolvers.append(("yt-dlp", resolve_with_yt_dlp))
     resolvers.extend((
         ("embedded-media", resolve_with_embedded_media),
-        ("yutorah-mp4", resolve_yutorah_mp4),
+        ("yutorah-media", resolve_yutorah_media),
     ))
     if not any(name == "yt-dlp" for name, _ in resolvers):
         resolvers.append(("yt-dlp", resolve_with_yt_dlp))
 
     for name, resolver in resolvers:
+        if report_progress is not None:
+            report_progress({"stage": name})
         try:
             result = resolver(url)
         except ResolutionFailure as e:
             errors.append(f"{name}: {e}")
             reason_codes.append(e.reason_code)
+            if report_progress is not None:
+                report_progress({"stage": name, "error": errors[-1], "reason_code": reason_codes[-1]})
             continue
         except Exception as e:  # Resolver boundary: keep trying the fallback chain.
             errors.append(f"{name}: {e}")
             reason_codes.append(classify_error(e))
+            if report_progress is not None:
+                report_progress({"stage": name, "error": errors[-1], "reason_code": reason_codes[-1]})
             LOGGER.debug("%s resolver failed for %s", name, url, exc_info=e)
             continue
 
@@ -157,7 +193,7 @@ def resolve_with_embedded_media(url: str) -> dict | None:
     if "html" not in content_type and "text" not in content_type:
         return None
 
-    media_urls = sorted({iri_to_uri(html.unescape(match.group(0))) for match in MEDIA_URL_PATTERN.finditer(response.text)})
+    media_urls = extract_media_urls(response.text)
     if media_urls:
         media_url = choose_media_url(media_urls)
         return build_result(media_url, extract_title(response.text))
@@ -165,7 +201,7 @@ def resolve_with_embedded_media(url: str) -> dict | None:
     return resolve_spreaker_embed(response.text)
 
 
-def resolve_yutorah_mp4(url: str) -> dict | None:
+def resolve_yutorah_media(url: str) -> dict | None:
     if not (match := YUTORAH_LECTURE_PATTERN.search(url)):
         return None
 
@@ -174,7 +210,10 @@ def resolve_yutorah_mp4(url: str) -> dict | None:
     response = requests.get(iframe_url, timeout=REQUEST_TIMEOUT_SECONDS, headers={"User-Agent": "torah-dl/1.0"})
     response.raise_for_status()
 
-    media_urls = sorted({iri_to_uri(html.unescape(match.group(0))) for match in MEDIA_URL_PATTERN.finditer(response.text)})
+    media_urls = extract_media_urls(response.text)
+    audio_urls = [media_url for media_url in media_urls if content_type_from_url(media_url).startswith("audio/")]
+    if audio_urls:
+        return build_result(choose_media_url(audio_urls), extract_yutorah_title(response.text))
     mp4_urls = [media_url for media_url in media_urls if media_url.lower().split("?", 1)[0].endswith(".mp4")]
     if mp4_urls:
         media_url = next((url for url in mp4_urls if not re.search(r"/\d+\.mp4$", urlsplit(url).path)), mp4_urls[0])

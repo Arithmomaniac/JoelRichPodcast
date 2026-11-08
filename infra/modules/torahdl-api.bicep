@@ -43,7 +43,7 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
     functionAppConfig: {
       scaleAndConcurrency: {
         maximumInstanceCount: 10
-        instanceMemoryMB: 512
+        instanceMemoryMB: 2048
       }
       runtime: {
         name: 'python'
