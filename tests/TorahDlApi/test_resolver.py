@@ -80,6 +80,23 @@ class ResolverTests(unittest.TestCase):
         self.assertEqual("Finance Debate", result["title"])
 
     @patch.object(resolver.requests, "get")
+    @patch.object(resolver, "extract", side_effect=RuntimeError("No matching media URL"))
+    def test_legacy_yutorah_audio_survives_modern_page_access_block(self, extract: Mock, get: Mock) -> None:
+        legacy_media_url = "https://download.yutorah.org/2008/lecture with spaces.MP3"
+        blocked_page = Mock()
+        blocked_page.raise_for_status.side_effect = resolver.requests.HTTPError("HTTP 403")
+        classic_page = Mock(
+            text=f'<title>YUTorah Online - Example</title><a href="{legacy_media_url}">Download</a>',
+        )
+        classic_page.raise_for_status.return_value = None
+        get.side_effect = [blocked_page, classic_page]
+
+        with patch.object(resolver, "resolve_with_yt_dlp", return_value=None):
+            result = resolver.resolve_url("https://www.yutorah.org/lectures/725657")
+
+        self.assertEqual("https://download.yutorah.org/2008/lecture%20with%20spaces.MP3", result["download_url"])
+
+    @patch.object(resolver.requests, "get")
     def test_yutorah_youtube_embed_is_access_blocked_not_fabricated_mp4(self, get: Mock) -> None:
         response = Mock(
             text='<iframe src="//www.youtube.com/embed/_JytEaeRgcw?feature=oembed"></iframe>',
@@ -88,7 +105,7 @@ class ResolverTests(unittest.TestCase):
         get.return_value = response
 
         with self.assertRaisesRegex(resolver.ResolutionFailure, "_JytEaeRgcw") as context:
-            resolver.resolve_yutorah_mp4("https://www.yutorah.org/lectures/1185079")
+            resolver.resolve_yutorah_media("https://www.yutorah.org/lectures/1185079")
 
         self.assertEqual(resolver.REASON_ACCESS_BLOCKED, context.exception.reason_code)
 
